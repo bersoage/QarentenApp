@@ -47,7 +47,8 @@ jobs:
       - name: Resumir errores
         if: failure()
         shell: bash
-        run: grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log > errores.txt || cp build.log errores.txt
+        run: |
+          grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log > errores.txt || cp build.log errores.txt
 
       - name: Publicar registro de errores
         if: failure()
