@@ -23,6 +23,8 @@ data class WidgetConf(
     val blackBackground: Boolean = false,
     val hideCaption: Boolean = false,
     val hideStatus: Boolean = false,
+    /** Solo grupos: congelar o activar de un toque en vez de abrir la ventana del grupo. */
+    val quickToggle: Boolean = false,
 )
 
 @Serializable

@@ -58,13 +58,13 @@ class ActionActivity : ComponentActivity() {
             return
         }
         when {
-            conf.kind == "group" && conf.directLaunch -> startActivity(
+            conf.kind == "group" && conf.quickToggle -> toggleGroup(conf.target, Origin.WIDGET)
+            conf.kind == "group" -> startActivity(
                 Intent(this, PopupActivity::class.java)
                     .putExtra(PopupActivity.EXTRA_MODE, PopupActivity.MODE_GROUP)
                     .putExtra(PopupActivity.EXTRA_ID, conf.target)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-            conf.kind == "group" -> toggleGroup(conf.target, Origin.WIDGET)
             conf.directLaunch -> Repo.launch(conf.target, Origin.WIDGET)
             else -> toggleApp(conf.target, Origin.WIDGET)
         }

@@ -26,6 +26,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
@@ -88,6 +95,106 @@ class PopupActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Ventana de un grupo (acceso directo y widget de grupo):
+     * activar o congelar todo, y la lista de apps con su candado.
+     * Tocar la app la abre (se descongela sola); tocar el candado la congela o la activa.
+     */
+    @Composable
+    private fun GroupWindow(vm: MainViewModel, groupId: String?, close: () -> Unit) {
+        val apps by Repo.apps.collectAsState()
+        val config by Repo.config.collectAsState()
+        val busy by Repo.busy.collectAsState()
+        val map = apps.associateBy { it.pkg }
+        val g = config.groups.firstOrNull { it.id == groupId }
+        val rows = g?.packages?.mapNotNull { map[it] }?.sortedBy { it.label.lowercase() } ?: emptyList()
+        val pending = g?.packages?.count { it !in map } ?: 0
+
+        Box(
+            Modifier.fillMaxSize().clickable(onClick = close).systemBarsPadding().padding(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).clickable(enabled = false) {},
+            ) {
+                Column {
+                    Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (g != null) Icon(groupIcon(g.icon), null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(10.dp))
+                        Text(g?.name ?: "Grupo borrado", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        IconButton(onClick = close) { Icon(Icons.Filled.Close, "Cerrar") }
+                    }
+                    if (g != null) Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { lifecycleScope.launch { Repo.setFrozen(g.packages, false, Origin.SHORTCUT) } },
+                            enabled = !busy && rows.any { it.frozen }, modifier = Modifier.weight(1f),
+                        ) { Text("Activar todo") }
+                        Button(
+                            onClick = { lifecycleScope.launch { Repo.setFrozen(g.packages, true, Origin.SHORTCUT) } },
+                            enabled = !busy && rows.any { !it.frozen && !it.protected }, modifier = Modifier.weight(1f),
+                        ) { Text("Congelar todo") }
+                    }
+                    HorizontalDivider()
+                    if (rows.isEmpty()) Text(
+                        if (g == null) "Este grupo ya no existe." else "Este grupo no tiene apps instaladas.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp),
+                    )
+                    LazyColumn(Modifier.weight(1f, fill = false)) {
+                        items(rows, key = { it.pkg }) { e ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable(enabled = e.hasLauncher) {
+                                            lifecycleScope.launch { if (Repo.launch(e.pkg, Origin.SHORTCUT)) close() }
+                                        }
+                                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                                ) {
+                                    AppIcon(vm, e.pkg, 48.dp, frozen = e.frozen, badge = false)
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(e.label, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            when {
+                                                e.protected -> "Protegida"
+                                                e.frozen -> "Congelada"
+                                                else -> "Activa"
+                                            },
+                                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { lifecycleScope.launch { Repo.toggle(e.pkg, Origin.SHORTCUT) } },
+                                    enabled = !e.protected && !busy,
+                                    modifier = Modifier.padding(end = 8.dp).size(56.dp),
+                                ) {
+                                    if (e.frozen) Icon(Icons.Filled.Lock, "Congelada: tocá para activar",
+                                        tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(32.dp))
+                                    else Icon(Icons.Filled.LockOpen, "Activa: tocá para congelar",
+                                        tint = Color(0xFF7CB342), modifier = Modifier.size(32.dp))
+                                }
+                            }
+                            HorizontalDivider(Modifier.padding(start = 78.dp))
+                        }
+                    }
+                    if (pending > 0) Text(
+                        "$pending ${if (pending == 1) "app pendiente" else "apps pendientes"} de instalar",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        }
+    }
+
     @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
     @Composable
     private fun PopupContent(mode: String, groupId: String?, fullscreen: Boolean, close: () -> Unit) {
@@ -95,6 +202,11 @@ class PopupActivity : ComponentActivity() {
         val apps by Repo.apps.collectAsState()
         val config by Repo.config.collectAsState()
         val map = apps.associateBy { it.pkg }
+
+        if (mode == MODE_GROUP) {
+            GroupWindow(vm, groupId, close)
+            return
+        }
 
         val title: String
         val list: List<String>

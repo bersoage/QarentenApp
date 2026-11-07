@@ -19,13 +19,13 @@ object Shortcuts {
         Intent(context, ActionActivity::class.java).setAction(action).putExtra(ActionActivity.EXTRA_ID, id)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
-    /** Ícono que congela o activa el grupo entero de un toque. */
+    /** Ícono que abre la ventana del grupo: sus apps con candado, y activar o congelar todo. */
     fun pinGroup(context: Context, g: Group): Boolean {
         val info = ShortcutInfoCompat.Builder(context, "group_${g.id}")
             .setShortLabel(g.name)
-            .setLongLabel("Congelar o activar «${g.name}»")
+            .setLongLabel("Grupo «${g.name}»")
             .setIcon(IconCompat.createWithAdaptiveBitmap(padded(Bitmaps.group(g, false))))
-            .setIntent(action(context, ActionActivity.ACTION_TOGGLE_GROUP, g.id))
+            .setIntent(groupPopup(context, g.id))
             .build()
         return ShortcutManagerCompat.requestPinShortcut(context, info, null)
     }
@@ -50,6 +50,11 @@ object Shortcuts {
         return ShortcutManagerCompat.requestPinShortcut(context, info, null)
     }
 
+    private fun groupPopup(context: Context, id: String) =
+        Intent(context, PopupActivity::class.java).setAction(Intent.ACTION_VIEW)
+            .putExtra(PopupActivity.EXTRA_MODE, PopupActivity.MODE_GROUP).putExtra(PopupActivity.EXTRA_ID, id)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+
     private fun popup(context: Context, mode: String) =
         Intent(context, PopupActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra(PopupActivity.EXTRA_MODE, mode)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -68,7 +73,7 @@ object Shortcuts {
             Repo.config.value.groups.take(2).forEach { g ->
                 list += ShortcutInfoCompat.Builder(context, "dyn_group_${g.id}").setShortLabel(g.name)
                     .setIcon(IconCompat.createWithAdaptiveBitmap(padded(Bitmaps.group(g, false))))
-                    .setIntent(action(context, ActionActivity.ACTION_TOGGLE_GROUP, g.id)).build()
+                    .setIntent(groupPopup(context, g.id)).build()
             }
             ShortcutManagerCompat.setDynamicShortcuts(context, list)
         }

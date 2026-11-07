@@ -13,8 +13,8 @@ android {
         applicationId = "app.qarentenapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-beta2"
+        versionCode = 3
+        versionName = "0.3.0-beta4"
     }
 
     // Clave fija para las betas: así cada versión nueva se instala encima sin borrar tu configuración.

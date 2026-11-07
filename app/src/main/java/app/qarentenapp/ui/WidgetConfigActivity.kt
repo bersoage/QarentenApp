@@ -88,6 +88,7 @@ class WidgetConfigActivity : ComponentActivity() {
         var black by remember { mutableStateOf(existing?.blackBackground ?: false) }
         var hideCaption by remember { mutableStateOf(existing?.hideCaption ?: false) }
         var hideStatus by remember { mutableStateOf(existing?.hideStatus ?: false) }
+        var quick by remember { mutableStateOf(existing?.quickToggle ?: false) }
         var query by remember { mutableStateOf("") }
 
         Surface(Modifier.fillMaxSize()) {
@@ -138,15 +139,15 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 HorizontalDivider()
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Toggle("Lanzamiento directo",
-                        if (kind == "group") "Abre las apps del grupo en vez de congelarlo" else "Abre la app de un toque en vez de congelarla",
-                        direct) { direct = it }
+                    if (kind == "group") Toggle("Congelar o activar de un toque",
+                        "Si está apagado, el widget abre la ventana del grupo con sus apps", quick) { quick = it }
+                    else Toggle("Lanzamiento directo", "Abre la app de un toque (se descongela sola) en vez de congelarla", direct) { direct = it }
                     Toggle("Fondo negro", "Muestra el widget con fondo negro", black) { black = it }
                     Toggle("Ocultar nombre", "Oculta el nombre del grupo o la app", hideCaption) { hideCaption = it }
                     Toggle("Ocultar estado", "Oculta el indicador de congelado", hideStatus) { hideStatus = it }
                 }
                 Button(
-                    onClick = { target?.let { save(WidgetConf(kind, it, direct, black, hideCaption, hideStatus)) } },
+                    onClick = { target?.let { save(WidgetConf(kind, it, direct && kind == "app", black, hideCaption, hideStatus, quick && kind == "group")) } },
                     enabled = target != null,
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                 ) { Text(if (existing == null) "Agregar widget" else "Guardar") }
