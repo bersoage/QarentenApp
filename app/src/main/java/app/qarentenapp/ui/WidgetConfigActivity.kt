@@ -116,7 +116,7 @@ class WidgetConfigActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxWidth().clickable { target = g.id }.padding(horizontal = 12.dp, vertical = 6.dp),
                             ) {
                                 RadioButton(selected = target == g.id, onClick = { target = g.id })
-                                Icon(groupIcon(g.icon), null)
+                                GroupGlyph(g.icon, 24.dp, MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(12.dp))
                                 Text(g.name)
                             }

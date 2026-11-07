@@ -80,7 +80,8 @@ fun buildBrand() = buildAnnotatedString {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) -> Unit, openApp: (String) -> Unit) {
+fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) -> Unit, openApp: (String) -> Unit, autoGroup: () -> Unit) {
+    var askAuto by rememberSaveable { mutableStateOf(false) }
     val config by vm.config.collectAsState()
     val apps by vm.apps.collectAsState()
     val mode by vm.mode.collectAsState()
@@ -108,6 +109,7 @@ fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) ->
                     Text("Grupos", fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
                     StatusChips(vm, mode, config.settings.lastBackupAt, config.settings.autoBackupTree != null)
+                    TextButton(onClick = { askAuto = true }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text("✨ Auto agrupar") }
                     if (searching) OutlinedTextField(
                         filter, { filter = it }, singleLine = true, placeholder = { Text("Filtrar grupos") },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -155,6 +157,14 @@ fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) ->
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         )
     }
+
+    if (askAuto) AlertDialog(
+        onDismissRequest = { askAuto = false },
+        title = { Text("¿Querés auto agrupar?") },
+        text = { Text("Vamos a revisar tus apps y proponerte grupos por rubro. Vas a poder elegir cuáles aceptar. No se congela nada.") },
+        confirmButton = { TextButton(onClick = { askAuto = false; autoGroup() }) { Text("Sí") } },
+        dismissButton = { TextButton(onClick = { askAuto = false }) { Text("No") } },
+    )
 
     if (creating) GroupDialog(
         title = "Nuevo grupo", initialName = "", initialIcon = "folder", initialColor = config.groups.size % GroupColorPairs.size,
@@ -208,9 +218,7 @@ private fun GroupCard(vm: MainViewModel, g: Group, map: Map<String, AppEntry>, o
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(shape = RoundedCornerShape(16.dp), color = bg, modifier = Modifier.size(48.dp)) {
-                        Box(contentAlignment = Alignment.Center) { Icon(groupIcon(g.icon), null, tint = fg) }
-                    }
+                    GroupTile(g, allFrozen, 56.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(g.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -250,7 +258,7 @@ private fun GroupCard(vm: MainViewModel, g: Group, map: Map<String, AppEntry>, o
     }
 }
 
-/** Diálogo para crear o editar un grupo: nombre, ícono y color. */
+/** Diálogo para crear o editar un grupo: nombre, ícono y color, con vista previa. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GroupDialog(
@@ -259,37 +267,43 @@ fun GroupDialog(
     initialIcon: String,
     initialColor: Int,
     onDismiss: () -> Unit,
+    groupApps: List<String> = emptyList(),
     onSave: (String, String, Int) -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf(initialName) }
     var icon by rememberSaveable { mutableStateOf(initialIcon) }
     var color by rememberSaveable { mutableStateOf(initialColor) }
+    // Si el usuario no eligió ícono a mano, se sugiere según el nombre
+    var iconTouched by rememberSaveable { mutableStateOf(initialName.isNotBlank()) }
+    var picking by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = name, onValueChange = { name = it.take(40) },
+                    value = name,
+                    onValueChange = {
+                        name = it.take(40)
+                        if (!iconTouched) suggestIcon(name)?.let { k -> icon = k }
+                    },
                     label = { Text("Nombre") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
-                Text("Ícono", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GroupIcons.forEach { (key, vec) ->
-                        FilledIconToggleButton(checked = icon == key, onCheckedChange = { icon = key }) {
-                            Icon(vec, contentDescription = key)
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GroupTile(Group(id = "preview", name = name, icon = icon, color = color), frozen = true, size = 64.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (icon.startsWith("app:")) "Ícono de una app" else iconDef(icon).label, fontWeight = FontWeight.Medium)
+                        TextButton(onClick = { picking = true }, contentPadding = PaddingValues(0.dp)) { Text("Cambiar ícono") }
                     }
                 }
                 Text("Color", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GroupColorPairs.forEachIndexed { i, (bg, fg) ->
-                        Surface(
-                            onClick = { color = i }, shape = CircleShape, color = bg, modifier = Modifier.size(36.dp),
-                        ) {
+                    app.qarentenapp.core.Bitmaps.groupBase.forEachIndexed { i, base ->
+                        Surface(onClick = { color = i }, shape = CircleShape, color = androidx.compose.ui.graphics.Color(base), modifier = Modifier.size(36.dp)) {
                             Box(contentAlignment = Alignment.Center) {
-                                if (color == i) Icon(Icons.Filled.Check, "Elegido", tint = fg, modifier = Modifier.size(18.dp))
+                                if (color == i) Icon(Icons.Filled.Check, "Elegido", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -299,4 +313,7 @@ fun GroupDialog(
         confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(name, icon, color) }) { Text("Guardar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
+    if (picking) IconPickerDialog(current = icon, groupApps = groupApps, onDismiss = { picking = false }) {
+        icon = it; iconTouched = true; picking = false
+    }
 }

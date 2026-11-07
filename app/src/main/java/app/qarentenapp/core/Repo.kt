@@ -148,6 +148,19 @@ object Repo {
         return appMap()[pkg]?.frozen
     }
 
+    /**
+     * Apps del sistema que hay que confirmar antes de congelar
+     * (activas, no protegidas y sin "no volver a preguntar").
+     */
+    fun systemToConfirm(pkgs: Collection<String>, frozen: Boolean): List<String> {
+        if (!frozen) return emptyList()
+        val map = appMap()
+        val acked = _config.value.systemAcked
+        return pkgs.distinct().filter { p -> map[p]?.let { it.isSystem && !it.protected && !it.frozen } == true && p !in acked }
+    }
+
+    fun ackSystem(pkgs: Collection<String>) = update { it.copy(systemAcked = it.systemAcked + pkgs) }
+
     fun groupFrozen(g: Group): Boolean {
         val map = appMap()
         val installed = g.packages.mapNotNull { map[it] }.filterNot { it.protected }

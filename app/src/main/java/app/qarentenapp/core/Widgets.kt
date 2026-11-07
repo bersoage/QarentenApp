@@ -49,7 +49,7 @@ object Widgets {
                 if (g == null) Triple("Grupo borrado", false, null)
                 else {
                     val f = Repo.groupFrozen(g)
-                    Triple(g.name, f, runCatching { Bitmaps.group(g, f) }.getOrNull())
+                    Triple(g.name, f, runCatching { Bitmaps.group(g, f, 192) }.getOrNull())
                 }
             }
             else -> {
@@ -61,9 +61,15 @@ object Widgets {
         rv.setTextViewText(R.id.w_label, label)
         rv.setViewVisibility(R.id.w_label, if (conf.hideCaption) View.GONE else View.VISIBLE)
         rv.setViewVisibility(R.id.w_status, if (!conf.hideStatus && frozen) View.VISIBLE else View.GONE)
-        rv.setInt(R.id.w_root, "setBackgroundResource",
-            if (conf.blackBackground) R.drawable.widget_bg_black else R.drawable.widget_bg_light)
-        rv.setTextColor(R.id.w_label, if (conf.blackBackground) 0xFFFFFFFF.toInt() else 0xFF14202C.toInt())
+        // El ícono de grupo ya trae su propio fondo con carámbanos
+        rv.setInt(R.id.w_root, "setBackgroundResource", when {
+            conf.blackBackground -> R.drawable.widget_bg_black
+            conf.kind == "group" -> android.R.color.transparent
+            else -> R.drawable.widget_bg_light
+        })
+        if (conf.kind == "group") rv.setViewVisibility(R.id.w_status, android.view.View.GONE)
+        // Sobre el fondo de pantalla (grupo sin fondo) el nombre va en blanco, como en el launcher
+        rv.setTextColor(R.id.w_label, if (conf.blackBackground || conf.kind == "group") 0xFFFFFFFF.toInt() else 0xFF14202C.toInt())
 
         val tap = Intent(context, ActionActivity::class.java)
             .setAction(ActionActivity.ACTION_WIDGET)

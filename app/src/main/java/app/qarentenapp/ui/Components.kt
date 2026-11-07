@@ -3,6 +3,8 @@ package app.qarentenapp.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -10,18 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.outlined.AccountBalance
-import androidx.compose.material.icons.outlined.Chat
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.School
-import androidx.compose.material.icons.outlined.ShoppingBag
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.TravelExplore
-import androidx.compose.material.icons.outlined.Work
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,29 +32,50 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import app.qarentenapp.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Íconos disponibles para los grupos. */
-val GroupIcons: List<Pair<String, ImageVector>> = listOf(
-    "folder" to Icons.Outlined.Folder,
-    "shopping" to Icons.Outlined.ShoppingBag,
-    "bank" to Icons.Outlined.AccountBalance,
-    "camera" to Icons.Outlined.PhotoCamera,
-    "movie" to Icons.Outlined.Movie,
-    "music" to Icons.Outlined.MusicNote,
-    "games" to Icons.Outlined.SportsEsports,
-    "work" to Icons.Outlined.Work,
-    "chat" to Icons.Outlined.Chat,
-    "school" to Icons.Outlined.School,
-    "travel" to Icons.Outlined.TravelExplore,
-    "star" to Icons.Outlined.Star,
-)
+val MaterialIconsFont = FontFamily(Font(R.font.material_icons))
+val MaterialIconsOutlinedFont = FontFamily(Font(R.font.material_icons_outlined))
 
-fun groupIcon(key: String): ImageVector = GroupIcons.firstOrNull { it.first == key }?.second ?: Icons.Outlined.Folder
+/** Glifo de la fuente de íconos (por código). */
+@Composable
+fun Glyph(glyph: String, size: Dp, tint: Color, outlined: Boolean = false, modifier: Modifier = Modifier) {
+    Text(
+        glyph,
+        fontFamily = if (outlined) MaterialIconsOutlinedFont else MaterialIconsFont,
+        fontSize = with(LocalDensity.current) { size.toSp() },
+        lineHeight = with(LocalDensity.current) { size.toSp() },
+        color = tint,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Ícono de un grupo: un glifo del catálogo o, si la clave es "app:<paquete>", el ícono de esa app.
+ */
+@Composable
+fun GroupGlyph(key: String, size: Dp, tint: Color) {
+    if (key.startsWith("app:")) {
+        val pkg = key.removePrefix("app:")
+        var bmp by remember(pkg) { mutableStateOf<ImageBitmap?>(null) }
+        LaunchedEffect(pkg) {
+            bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                app.qarentenapp.core.Repo.source.loadIconBitmap(pkg, 128)?.asImageBitmap()
+            }
+        }
+        val b = bmp
+        if (b != null) Image(b, null, Modifier.size(size).clip(RoundedCornerShape(size * 0.25f)))
+        else Box(Modifier.size(size))
+    } else Glyph(iconDef(key).glyph, size, tint)
+}
 
 private val grey = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
 private val mono = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
@@ -147,4 +158,55 @@ fun AppIcon(
             }
         }
     }
+}
+
+/** Ícono de grupo con carámbanos (el mismo de los accesos directos y widgets). */
+@Composable
+fun GroupTile(g: app.qarentenapp.data.Group, frozen: Boolean, size: Dp) {
+    val px = with(LocalDensity.current) { size.roundToPx() }
+    var bmp by remember(g, frozen, px) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(g, frozen, px) {
+        bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            runCatching { app.qarentenapp.core.Bitmaps.group(g, frozen, px.coerceAtLeast(48)).asImageBitmap() }.getOrNull()
+        }
+    }
+    val b = bmp
+    if (b != null) Image(b, contentDescription = null, modifier = Modifier.size(size))
+    else Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.22f)).background(groupColors(g.color).first))
+}
+
+/** Pedido de confirmación para congelar apps del sistema. */
+data class SystemConfirm(val pkgs: List<String>, val system: List<String>, val run: () -> Unit)
+
+/** Aviso ⚠️ antes de congelar apps del sistema. */
+@Composable
+fun SystemConfirmDialog(req: SystemConfirm, onDismiss: () -> Unit) {
+    var dontAsk by remember { mutableStateOf(false) }
+    val names = req.system.map { app.qarentenapp.core.Repo.labelOf(it) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("⚠️ Ojo: " + if (names.size == 1) "es una app del sistema" else "hay ${names.size} apps del sistema") },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text(
+                    (if (names.size == 1) "«${names[0]}»" else names.joinToString(", ") { "«$it»" }) +
+                        ". Congelar apps del sistema puede hacer que algo del celular deje de funcionar (notificaciones, cámara, llamadas…). ¿Congelar igual?"
+                )
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp).clickable { dontAsk = !dontAsk },
+                ) {
+                    androidx.compose.material3.Checkbox(checked = dontAsk, onCheckedChange = { dontAsk = it })
+                    Text(if (names.size == 1) "No volver a preguntar por esta app" else "No volver a preguntar por estas apps", fontSize = 14.sp)
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                if (dontAsk) app.qarentenapp.core.Repo.ackSystem(req.system)
+                req.run(); onDismiss()
+            }) { Text("Congelar igual") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }

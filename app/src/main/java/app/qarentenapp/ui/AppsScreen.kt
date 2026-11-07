@@ -223,8 +223,8 @@ fun AppLabel(a: AppEntry, showPkg: Boolean, favorite: Boolean, modifier: Modifie
                 modifier = Modifier.padding(start = 4.dp).size(14.dp))
         }
         val parts = buildList {
-            if (a.isSystem) add(if (a.hasLauncher) "Sistema" else "Servicio del sistema")
             if (a.protected) add("Protegida")
+            else if (a.isSystem) add(if (a.hasLauncher) "⚠️ App del sistema · cuidado" else "⚠️ Servicio del sistema · cuidado")
             if (a.frozen) add("Congelada")
             if (showPkg) add(a.pkg)
         }

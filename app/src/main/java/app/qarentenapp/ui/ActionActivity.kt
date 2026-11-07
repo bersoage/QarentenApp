@@ -43,7 +43,7 @@ class ActionActivity : ComponentActivity() {
                 ACTION_LAUNCH -> Repo.launch(id, Origin.SHORTCUT)
                 ACTION_WIDGET -> widget(id)
             }
-            finish()
+            if (!waiting) finish()
         }
     }
 
@@ -70,8 +70,25 @@ class ActionActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun toggleGroup(id: String, origin: Origin) {
-        val name = Repo.config.value.groups.firstOrNull { it.id == id }?.name ?: return toast("Ese grupo ya no existe")
+    /** Esperando que el usuario confirme el aviso de apps del sistema. */
+    private var waiting = false
+
+    /** Si hay apps del sistema para congelar, muestra el aviso y sigue solo si confirma. */
+    private fun needsConfirm(pkgs: List<String>, frozen: Boolean, then: suspend () -> Unit): Boolean {
+        val sys = Repo.systemToConfirm(pkgs, frozen)
+        if (sys.isEmpty()) return false
+        waiting = true
+        var confirmed = false
+        val req = SystemConfirm(pkgs, sys) { confirmed = true; lifecycleScope.launch { then(); finish() } }
+        setContent { QTheme { SystemConfirmDialog(req, onDismiss = { if (!confirmed) finish() }) } }
+        return true
+    }
+
+    private suspend fun toggleGroup(id: String, origin: Origin, confirmed: Boolean = false) {
+        if (Repo.apps.value.isEmpty()) Repo.refresh()
+        val g = Repo.config.value.groups.firstOrNull { it.id == id } ?: return toast("Ese grupo ya no existe")
+        val name = g.name
+        if (!confirmed && needsConfirm(g.packages, !Repo.groupFrozen(g)) { toggleGroup(id, origin, true) }) return
         when (Repo.toggleGroup(id, origin)) {
             true -> toast("«$name» congelado")
             false -> toast("«$name» activo")
@@ -79,7 +96,10 @@ class ActionActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun toggleApp(pkg: String, origin: Origin) {
+    private suspend fun toggleApp(pkg: String, origin: Origin, confirmed: Boolean = false) {
+        if (Repo.apps.value.isEmpty()) Repo.refresh()
+        val e = Repo.appMap()[pkg]
+        if (!confirmed && e != null && needsConfirm(listOf(pkg), !e.frozen) { toggleApp(pkg, origin, true) }) return
         when (Repo.toggle(pkg, origin)) {
             true -> toast("${Repo.labelOf(pkg)} congelada")
             false -> toast("${Repo.labelOf(pkg)} activa")

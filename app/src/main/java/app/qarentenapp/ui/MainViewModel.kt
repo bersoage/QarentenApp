@@ -107,9 +107,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- Congelar ----------------
 
-    fun toggle(pkg: String) = viewModelScope.launch { Repo.toggle(pkg) }
-    fun setFrozen(pkgs: List<String>, frozen: Boolean) = viewModelScope.launch { Repo.setFrozen(pkgs, frozen) }
-    fun setGroupFrozen(g: Group, frozen: Boolean) = viewModelScope.launch { Repo.setFrozen(g.packages, frozen) }
+    /** Confirmación pendiente para congelar apps del sistema. */
+    private val _confirm = MutableStateFlow<SystemConfirm?>(null)
+    val confirm = _confirm.asStateFlow()
+    fun dismissConfirm() { _confirm.value = null }
+
+    /** Congela o activa; si hay apps del sistema, pide confirmación antes. */
+    private fun guarded(pkgs: List<String>, frozen: Boolean) {
+        val run = { viewModelScope.launch { Repo.setFrozen(pkgs, frozen) }; Unit }
+        val sys = Repo.systemToConfirm(pkgs, frozen)
+        if (sys.isEmpty()) run() else _confirm.value = SystemConfirm(pkgs, sys, run)
+    }
+
+    fun toggle(pkg: String) {
+        val e = Repo.appMap()[pkg] ?: return
+        guarded(listOf(pkg), !e.frozen)
+    }
+    fun setFrozen(pkgs: List<String>, frozen: Boolean) = guarded(pkgs, frozen)
+    fun setGroupFrozen(g: Group, frozen: Boolean) = guarded(g.packages, frozen)
     fun launch(pkg: String) = viewModelScope.launch { Repo.launch(pkg) }
     fun openStore(pkg: String) = Repo.openStore(pkg)
 
@@ -166,6 +181,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun editGroup(id: String, f: (Group) -> Group) =
         Repo.update { c -> c.copy(groups = c.groups.map { if (it.id == id) f(it) else it }) }
+
+    /** Crea los grupos propuestos; si ya existe uno con el mismo nombre, suma las apps ahí. */
+    fun applyAutoGroups(list: List<app.qarentenapp.core.Proposal>) {
+        Repo.update { c ->
+            val groups = c.groups.toMutableList()
+            list.forEach { p ->
+                val i = groups.indexOfFirst { it.name.equals(p.name, ignoreCase = true) }
+                if (i >= 0) groups[i] = groups[i].copy(packages = (groups[i].packages + p.packages).distinct())
+                else groups += Group(id = UUID.randomUUID().toString(), name = p.name, icon = p.icon, color = p.color, packages = p.packages)
+            }
+            c.copy(groups = groups)
+        }
+        Repo.say(if (list.size == 1) "Listo: 1 grupo armado" else "Listo: ${list.size} grupos armados")
+    }
+
+    fun markWelcomeShown() = updateSettings { it.copy(welcomeShown = true) }
 
     // ---------------- Ajustes ----------------
 

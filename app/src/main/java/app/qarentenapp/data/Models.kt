@@ -37,6 +37,10 @@ data class AppSettings(
     val showPackageName: Boolean = false,
     // Apariencia
     val iconTheme: String = "ORIGINAL",
+    /** AUTO (según el celular), LIGHT (claro hielo) o DARK (azul noche). */
+    val themeMode: String = "AUTO",
+    /** Ya se mostró el cartel de bienvenida. */
+    val welcomeShown: Boolean = false,
     // Notificación
     val notifyActive: Boolean = true,
     val notifStyle: String = "AUTO",
@@ -74,6 +78,8 @@ data class Config(
     val active: Set<String> = emptySet(),
     /** Últimas apps cambiadas desde la notificación o un widget (para relanzarlas). */
     val recent: List<String> = emptyList(),
+    /** Apps del sistema que el usuario pidió no volver a advertir al congelarlas. */
+    val systemAcked: Set<String> = emptySet(),
     /** Configuración de cada widget, por id de widget (no se exporta). */
     val widgets: Map<String, WidgetConf> = emptyMap(),
     val settings: AppSettings = AppSettings(),

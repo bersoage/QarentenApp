@@ -135,6 +135,12 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ---------- Apariencia ----------
         Section("Apariencia")
+        Text("Colores", modifier = Modifier.padding(horizontal = 24.dp))
+        FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("AUTO" to "Según el celular", "LIGHT" to "Claro hielo", "DARK" to "Azul noche").forEach { (key, label) ->
+                FilterChip(selected = s.themeMode == key, onClick = { vm.updateSettings { it.copy(themeMode = key) } }, label = { Text(label) })
+            }
+        }
         Text("Tema de íconos", modifier = Modifier.padding(horizontal = 24.dp))
         FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconThemes.forEach { (key, label) ->

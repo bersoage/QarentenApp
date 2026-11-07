@@ -38,7 +38,7 @@ object Shortcuts {
         ShortcutInfoCompat.Builder(context, id)
             .setShortLabel(g.name)
             .setLongLabel("Grupo «${g.name}»")
-            .setIcon(IconCompat.createWithAdaptiveBitmap(padded(Bitmaps.group(g, false))))
+            .setIcon(IconCompat.createWithAdaptiveBitmap(Bitmaps.group(g, Repo.groupFrozen(g), 432, adaptive = true)))
             .setIntent(groupPopup(context, g.id))
             .build()
 
@@ -47,7 +47,7 @@ object Shortcuts {
         ShortcutInfoCompat.Builder(context, "grouptoggle_${g.id}")
             .setShortLabel(g.name)
             .setLongLabel("Congelar o activar «${g.name}»")
-            .setIcon(IconCompat.createWithAdaptiveBitmap(padded(Bitmaps.group(g, false))))
+            .setIcon(IconCompat.createWithAdaptiveBitmap(Bitmaps.group(g, Repo.groupFrozen(g), 432, adaptive = true)))
             .setIntent(action(context, ActionActivity.ACTION_TOGGLE_GROUP, g.id))
             .build()
 

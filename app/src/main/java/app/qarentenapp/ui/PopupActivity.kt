@@ -31,6 +31,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,20 +97,34 @@ class PopupActivity : ComponentActivity() {
         }
     }
 
+    /** Pedido de confirmación de apps del sistema dentro de las ventanas flotantes. */
+    private val confirmState = mutableStateOf<SystemConfirm?>(null)
+
+    private fun guarded(pkgs: List<String>, frozen: Boolean, origin: Origin) {
+        val run = { lifecycleScope.launch { Repo.setFrozen(pkgs, frozen, origin) }; Unit }
+        val sys = Repo.systemToConfirm(pkgs, frozen)
+        if (sys.isEmpty()) run() else confirmState.value = SystemConfirm(pkgs, sys, run)
+    }
+
     /**
-     * Ventana de un grupo (acceso directo y widget de grupo):
-     * activar o congelar todo, y la lista de apps con su candado.
-     * Tocar la app la abre (se descongela sola); tocar el candado la congela o la activa.
+     * Ventana de un grupo (acceso directo y widget de grupo), en gris carbón:
+     * «Congelar todas» (azul) y «Descongelar todas» (rojo), y la lista de apps con ❄️ o 🔥.
+     * Tocar la app la abre (se descongela sola); tocar ❄️/🔥 la congela o la activa.
      */
     @Composable
     private fun GroupWindow(vm: MainViewModel, groupId: String?, close: () -> Unit) {
+        val head = Color(0xFF151515); val line = Color(0xFF3D3B39); val body = Color(0xFF20201F)
+        val txt = Color(0xFFECECEA); val sub = Color(0xFFA0A09C)
         val apps by Repo.apps.collectAsState()
         val config by Repo.config.collectAsState()
         val busy by Repo.busy.collectAsState()
+        val confirm by confirmState
         val map = apps.associateBy { it.pkg }
         val g = config.groups.firstOrNull { it.id == groupId }
         val rows = g?.packages?.mapNotNull { map[it] }?.sortedBy { it.label.lowercase() } ?: emptyList()
         val pending = g?.packages?.count { it !in map } ?: 0
+
+        confirm?.let { SystemConfirmDialog(it, onDismiss = { confirmState.value = null }) }
 
         Box(
             Modifier.fillMaxSize().clickable(onClick = close).systemBarsPadding().padding(20.dp),
@@ -116,37 +132,56 @@ class PopupActivity : ComponentActivity() {
         ) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).clickable(enabled = false) {},
+                color = body,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 660.dp).clickable(enabled = false) {},
             ) {
                 Column {
-                    Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (g != null) Icon(groupIcon(g.icon), null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(10.dp))
-                        Text(g?.name ?: "Grupo borrado", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        IconButton(onClick = close) { Icon(Icons.Filled.Close, "Cerrar") }
-                    }
-                    if (g != null) Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Row(
+                        Modifier.fillMaxWidth().background(head).padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedButton(
-                            onClick = { lifecycleScope.launch { Repo.setFrozen(g.packages, false, Origin.SHORTCUT) } },
-                            enabled = !busy && rows.any { it.frozen }, modifier = Modifier.weight(1f),
-                        ) { Text("Activar todo") }
-                        Button(
-                            onClick = { lifecycleScope.launch { Repo.setFrozen(g.packages, true, Origin.SHORTCUT) } },
-                            enabled = !busy && rows.any { !it.frozen && !it.protected }, modifier = Modifier.weight(1f),
-                        ) { Text("Congelar todo") }
+                        if (g != null) GroupGlyph(g.icon, 28.dp, Color(0xFF78AAE6))
+                        Spacer(Modifier.width(12.dp))
+                        Text(g?.name ?: "Grupo borrado", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = txt,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        IconButton(onClick = close) { Icon(Icons.Filled.Close, "Cerrar", tint = sub) }
                     }
-                    HorizontalDivider()
+                    HorizontalDivider(color = line)
+                    if (g != null) Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Button(
+                            onClick = { guarded(g.packages, true, Origin.SHORTCUT) },
+                            enabled = !busy && rows.any { !it.frozen && !it.protected },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F5E8E), contentColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Glyph("\ueb3b", 18.dp, Color.White, outlined = true)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Congelar todas", fontSize = 14.sp, maxLines = 1)
+                        }
+                        Button(
+                            onClick = { guarded(g.packages, false, Origin.SHORTCUT) },
+                            enabled = !busy && rows.any { it.frozen },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E), contentColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Glyph("\uef55", 18.dp, Color.White, outlined = true)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Descongelar todas", fontSize = 14.sp, maxLines = 1)
+                        }
+                    }
+                    HorizontalDivider(color = line)
                     if (rows.isEmpty()) Text(
                         if (g == null) "Este grupo ya no existe." else "Este grupo no tiene apps instaladas.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp),
+                        color = sub, modifier = Modifier.padding(20.dp),
                     )
                     LazyColumn(Modifier.weight(1f, fill = false)) {
                         items(rows, key = { it.pkg }) { e ->
+                            val system = e.isSystem && !e.protected
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -155,40 +190,40 @@ class PopupActivity : ComponentActivity() {
                                         .clickable(enabled = e.hasLauncher) {
                                             lifecycleScope.launch { if (Repo.launch(e.pkg, Origin.SHORTCUT)) close() }
                                         }
-                                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                                        .padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
                                 ) {
-                                    AppIcon(vm, e.pkg, 48.dp, frozen = e.frozen, badge = false)
+                                    AppIcon(vm, e.pkg, 46.dp, frozen = e.frozen, badge = false)
                                     Spacer(Modifier.width(14.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(e.label, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text((if (system) "⚠️ " else "") + e.label, fontSize = 17.sp, color = txt,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(
                                             when {
                                                 e.protected -> "Protegida"
+                                                system && e.frozen -> "Congelada · app del sistema"
+                                                system -> "Activa · app del sistema, cuidado"
                                                 e.frozen -> "Congelada"
                                                 else -> "Activa"
                                             },
-                                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.sp, color = sub,
                                         )
                                     }
                                 }
-                                IconButton(
-                                    onClick = { lifecycleScope.launch { Repo.toggle(e.pkg, Origin.SHORTCUT) } },
+                                TextButton(
+                                    onClick = { guarded(listOf(e.pkg), !e.frozen, Origin.SHORTCUT) },
                                     enabled = !e.protected && !busy,
-                                    modifier = Modifier.padding(end = 8.dp).size(56.dp),
+                                    modifier = Modifier.padding(end = 6.dp).size(60.dp),
                                 ) {
-                                    if (e.frozen) Icon(Icons.Filled.Lock, "Congelada: tocá para activar",
-                                        tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(32.dp))
-                                    else Icon(Icons.Filled.LockOpen, "Activa: tocá para congelar",
-                                        tint = Color(0xFF7CB342), modifier = Modifier.size(32.dp))
+                                    if (e.protected) Icon(Icons.Filled.Lock, "Protegida", tint = sub)
+                                    else Text(if (e.frozen) "❄️" else "🔥", fontSize = 28.sp)
                                 }
                             }
-                            HorizontalDivider(Modifier.padding(start = 78.dp))
+                            HorizontalDivider(Modifier.padding(start = 76.dp), color = line)
                         }
                     }
                     if (pending > 0) Text(
                         "$pending ${if (pending == 1) "app pendiente" else "apps pendientes"} de instalar",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
+                        fontSize = 12.sp, color = sub, modifier = Modifier.padding(16.dp),
                     )
                 }
             }
@@ -207,6 +242,8 @@ class PopupActivity : ComponentActivity() {
             GroupWindow(vm, groupId, close)
             return
         }
+        val pendingConfirm by confirmState
+        pendingConfirm?.let { SystemConfirmDialog(it, onDismiss = { confirmState.value = null }) }
 
         val title: String
         val list: List<String>
@@ -257,9 +294,9 @@ class PopupActivity : ComponentActivity() {
                                     val frozen = remember(apps, g) { Repo.groupFrozen(g) }
                                     FilterChip(
                                         selected = frozen,
-                                        onClick = { lifecycleScope.launch { Repo.toggleGroup(g.id, Origin.WIDGET) } },
+                                        onClick = { guarded(g.packages, !Repo.groupFrozen(g), Origin.WIDGET) },
                                         label = { Text(g.name) },
-                                        leadingIcon = { Icon(if (frozen) Icons.Filled.AcUnit else groupIcon(g.icon), null, Modifier.size(18.dp)) },
+                                        leadingIcon = { if (frozen) Icon(Icons.Filled.AcUnit, null, Modifier.size(18.dp)) else GroupGlyph(g.icon, 18.dp, MaterialTheme.colorScheme.onSurfaceVariant) },
                                     )
                                 }
                             }
@@ -284,21 +321,21 @@ class PopupActivity : ComponentActivity() {
                             modifier = Modifier.combinedClickable(
                                 onClick = {
                                     lifecycleScope.launch {
-                                        if (mode == MODE_QUICK) Repo.toggle(p, Origin.WIDGET)
+                                        if (mode == MODE_QUICK) guarded(listOf(p), !e.frozen, Origin.WIDGET)
                                         else { Repo.launch(p, Origin.WIDGET); close() }
                                     }
                                 },
                                 onLongClick = {
                                     lifecycleScope.launch {
                                         if (mode == MODE_QUICK) { Repo.launch(p, Origin.WIDGET); close() }
-                                        else Repo.toggle(p, Origin.WIDGET)
+                                        else guarded(listOf(p), !e.frozen, Origin.WIDGET)
                                     }
                                 },
                             ).padding(4.dp),
                         ) {
                             AppIcon(vm, p, 56.dp, frozen = e.frozen)
                             Spacer(Modifier.size(4.dp))
-                            Text(e.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text((if (e.isSystem && !e.protected) "⚠️ " else "") + e.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     item(span = { GridItemSpan(maxLineSpan) }) {

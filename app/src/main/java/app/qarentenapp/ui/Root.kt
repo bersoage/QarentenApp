@@ -38,6 +38,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -62,6 +65,10 @@ fun QRoot(vm: MainViewModel) {
     val nav = rememberNavController()
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snack.showSnackbar(it) } }
+
+    // Aviso antes de congelar apps del sistema
+    val confirm by vm.confirm.collectAsState()
+    confirm?.let { SystemConfirmDialog(it, onDismiss = { vm.dismissConfirm() }) }
 
     // Restaurar backup
     val pendingImport by vm.pendingImport.collectAsState()
@@ -92,6 +99,12 @@ fun QRoot(vm: MainViewModel) {
         )
     }
 
+    // Cartel de bienvenida (solo la primera vez)
+    if (!config.settings.welcomeShown) WelcomeDialog(
+        onHelp = { vm.markWelcomeShown(); nav.navigate("autogroup") },
+        onSelf = { vm.markWelcomeShown() },
+    )
+
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "groups"
     val tabs = listOf("groups", "apps", "settings")
@@ -111,7 +124,8 @@ fun QRoot(vm: MainViewModel) {
                 GroupsScreen(vm,
                     open = { nav.navigate("group/$it") },
                     created = { nav.navigate("group/$it"); nav.navigate("pick/$it") },
-                    openApp = { nav.navigate("app/$it") })
+                    openApp = { nav.navigate("app/$it") },
+                    autoGroup = { nav.navigate("autogroup") })
             }
             composable("apps") { AppsScreen(vm, openApp = { nav.navigate("app/$it") }) }
             composable("settings") { SettingsScreen(vm) }
@@ -123,6 +137,7 @@ fun QRoot(vm: MainViewModel) {
                 val id = it.arguments?.getString("id") ?: return@composable
                 PickAppsScreen(vm, id, done = { nav.popBackStack() })
             }
+            composable("autogroup") { AutoGroupScreen(vm, done = { nav.popBackStack() }) }
             composable("app/{pkg}", arguments = listOf(navArgument("pkg") { type = NavType.StringType })) {
                 val pkg = it.arguments?.getString("pkg") ?: return@composable
                 AppDetailScreen(vm, pkg, back = { nav.popBackStack() })
@@ -148,7 +163,7 @@ fun Splash() {
         Spacer(Modifier.height(32.dp))
         Image(
             painterResource(R.drawable.logo_texto), contentDescription = "QarentenApp",
-            modifier = Modifier.width(300.dp).clip(RoundedCornerShape(20.dp)),
+            modifier = Modifier.width(300.dp),
         )
         Spacer(Modifier.height(28.dp))
         Text(
@@ -172,4 +187,26 @@ fun BrandMark() {
         Spacer(Modifier.width(8.dp))
         Text(buildBrand(), fontSize = 16.sp)
     }
+}
+
+/** Cartel de bienvenida: explica Q'App y ofrece ayuda para armar los grupos. */
+@Composable
+fun WelcomeDialog(onHelp: () -> Unit, onSelf: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("¡Bienvenido a Q'App! ❄️") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Congelá las apps que no usás todo el tiempo. Una app congelada no consume batería ni datos, no te manda notificaciones y desaparece del cajón de aplicaciones hasta que la necesites.")
+                Text("Podés hacerlo de dos formas:", fontWeight = FontWeight.SemiBold)
+                Text("• App por app: congelás y descongelás cada una cuando quieras.")
+                Text("• Por grupos: armás grupos a tu gusto (Bancos, Juegos, Trabajo…) y congelás o activás todo el grupo de un toque, desde la app, un widget o un acceso directo.")
+                Text("¿Querés que te ayudemos a armar tus grupos?", fontWeight = FontWeight.SemiBold)
+                Text("Revisamos tus apps y te proponemos grupos por rubro. Vos elegís qué aceptar y no se congela nada sin tu permiso.",
+                    fontSize = 14.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onClick = onHelp) { Text("✨ Sí, ayudame") } },
+        dismissButton = { TextButton(onClick = onSelf) { Text("Prefiero armarlos yo") } },
+    )
 }

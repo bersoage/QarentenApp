@@ -92,12 +92,7 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val (gbg, gfg) = groupColors(g.color)
-                        Surface(shape = RoundedCornerShape(18.dp), color = gbg, modifier = Modifier.size(56.dp)) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(if (allFrozen) Icons.Filled.AcUnit else groupIcon(g.icon), null, tint = gfg)
-                            }
-                        }
+                        GroupTile(g, allFrozen, 60.dp)
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -131,7 +126,7 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
                     Text("Apps del grupo", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, start = 8.dp))
                 }
                 items(installed, key = { it.pkg }) { e ->
-                    AppTile(vm, e.pkg, e.label, e.frozen, pending = false,
+                    AppTile(vm, e.pkg, (if (e.isSystem && !e.protected) "⚠️ " else "") + e.label, e.frozen, pending = false,
                         onTap = { vm.toggle(e.pkg) },
                         menu = listOf(
                             "Abrir" to { vm.launch(e.pkg); Unit },
@@ -183,7 +178,7 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
         }
     }
 
-    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }) { n, i, c ->
+    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }, groupApps = g.packages) { n, i, c ->
         editing = false; vm.updateGroup(g.id, n, i, c)
     }
     if (deleting) AlertDialog(

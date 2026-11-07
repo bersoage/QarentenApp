@@ -100,7 +100,7 @@ open class CreateShortcutActivity : ComponentActivity() {
                                 else Shortcuts.groupInfo(this@CreateShortcutActivity, g))
                             }.padding(horizontal = 20.dp, vertical = 14.dp),
                         ) {
-                            Icon(groupIcon(g.icon), null, tint = MaterialTheme.colorScheme.primary)
+                            GroupGlyph(g.icon, 24.dp, MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(16.dp))
                             Text(g.name, fontSize = 17.sp)
                         }
