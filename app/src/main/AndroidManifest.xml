@@ -50,6 +50,39 @@
             android:label="Cajón de cuarentena"
             android:theme="@style/Theme.QApp.Translucent" />
 
+        <!-- Lista clásica "Accesos directos" del launcher (también la usan otras apps) -->
+        <activity
+            android:name=".ui.CreateGroupShortcut"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Grupo de Q'App">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ui.CreateAppShortcut"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="App en cuarentena (Q'App)">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ui.CreateDrawerShortcut"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Cajón de cuarentena"
+            android:theme="@style/Theme.QApp.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".ui.WidgetConfigActivity"
             android:exported="true"
