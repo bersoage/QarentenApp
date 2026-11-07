@@ -35,6 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
@@ -63,6 +67,20 @@ val GroupIcons: List<Pair<String, ImageVector>> = listOf(
 fun groupIcon(key: String): ImageVector = GroupIcons.firstOrNull { it.first == key }?.second ?: Icons.Outlined.Folder
 
 private val grey = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+private val mono = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+
+/** Temas de íconos. */
+val IconThemes = listOf(
+    "ORIGINAL" to "Original",
+    "ROUND" to "Redondos",
+    "SQUARE" to "Cuadrados",
+    "MONO" to "Monocromo",
+)
+
+/** Colores de tema de los grupos (fondo, primer plano). */
+val GroupColorPairs: List<Pair<Color, Color>> = app.qarentenapp.core.Bitmaps.groupColors.map { Color(it.first) to Color(it.second) }
+
+fun groupColors(index: Int) = GroupColorPairs[index.coerceIn(0, GroupColorPairs.lastIndex)]
 
 /** Ícono de una app; en gris y con copo de nieve si está congelada. */
 @Composable
@@ -76,15 +94,21 @@ fun AppIcon(
 ) {
     var bmp by remember(pkg) { mutableStateOf<ImageBitmap?>(vm.icon(pkg)) }
     LaunchedEffect(pkg) { if (bmp == null && !pending) bmp = vm.loadIcon(pkg) }
-    val shape = RoundedCornerShape(size * 0.28f)
+    val theme = vm.config.collectAsState().value.settings.iconTheme
+    val shape: Shape = when (theme) {
+        "ROUND" -> CircleShape
+        "SQUARE" -> RoundedCornerShape(size * 0.12f)
+        else -> RoundedCornerShape(size * 0.28f)
+    }
     Box(Modifier.size(size)) {
         val b = bmp
         if (b != null && !pending) {
             Image(
                 bitmap = b,
                 contentDescription = null,
-                colorFilter = if (frozen) grey else null,
-                modifier = Modifier.size(size).clip(shape).alpha(if (frozen) 0.55f else 1f),
+                colorFilter = if (frozen) grey else if (theme == "MONO") mono else null,
+                modifier = Modifier.size(size).clip(if (theme == "ORIGINAL") RectangleShape else shape)
+                    .alpha(if (frozen) 0.55f else 1f),
             )
         } else {
             Box(

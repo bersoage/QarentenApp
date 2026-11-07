@@ -31,7 +31,16 @@ class Store(private val context: Context) {
 
     /** Lo que se exporta: sin el estado efímero de "activas". */
     fun toBackupText(config: Config, now: Long): String =
-        json.encodeToString(Config.serializer(), config.copy(active = emptySet(), savedAt = now))
+        json.encodeToString(
+            Config.serializer(),
+            config.copy(
+                active = emptySet(), recent = emptyList(), widgets = emptyMap(), savedAt = now,
+                // La contraseña y la carpeta de backup son de este celular: no viajan en el archivo
+                settings = config.settings.copy(
+                    protectionEnabled = false, passwordHash = null, passwordSalt = null, autoBackupTree = null,
+                ),
+            ),
+        )
 
     fun parseBackup(text: String): Config? = runCatching {
         val c = json.decodeFromString(Config.serializer(), text)

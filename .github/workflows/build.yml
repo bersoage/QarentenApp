@@ -24,15 +24,13 @@ jobs:
           gradle-version: "8.9"
 
       - name: Compilar APK
-        run: gradle :app:assembleRelease --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --console=plain 2>&1 | tee build.log
 
       - name: Renombrar
         run: cp app/build/outputs/apk/release/app-release.apk QarentenApp-beta-${{ github.run_number }}.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: QarentenApp-beta-${{ github.run_number }}
-          path: QarentenApp-beta-${{ github.run_number }}.apk
 
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
@@ -42,5 +40,22 @@ jobs:
           prerelease: true
           files: QarentenApp-beta-${{ github.run_number }}.apk
           body: |
-            Beta de prueba. Bajá el .apk desde el celular e instalalo.
+            Beta de prueba. Bajá el .apk desde el celular e instalalo encima de la anterior.
             Commit: ${{ github.sha }}
+
+      # Si falla, se publica el registro de errores para poder revisarlo
+      - name: Resumir errores
+        if: failure()
+        shell: bash
+        run: grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log > errores.txt || cp build.log errores.txt
+
+      - name: Publicar registro de errores
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-log-${{ github.run_number }}
+          name: Error de compilación ${{ github.run_number }}
+          prerelease: true
+          files: |
+            errores.txt
+            build.log

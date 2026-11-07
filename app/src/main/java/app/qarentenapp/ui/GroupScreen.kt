@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -54,7 +55,8 @@ import androidx.compose.foundation.layout.Column as Col
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Unit) {
+fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Unit, openApp: (String) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val config by vm.config.collectAsState()
     val apps by vm.apps.collectAsState()
     val g = config.groups.firstOrNull { it.id == id }
@@ -74,6 +76,9 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
             navigationIcon = { IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver") } },
             actions = {
                 IconButton(onClick = pick) { Icon(Icons.Outlined.PlaylistAdd, "Elegir apps") }
+                if (app.qarentenapp.core.Shortcuts.canPin(ctx)) IconButton(onClick = { app.qarentenapp.core.Shortcuts.pinGroup(ctx, g) }) {
+                    Icon(Icons.Outlined.AddToHomeScreen, "Agregar a pantalla de inicio")
+                }
                 IconButton(onClick = { editing = true }) { Icon(Icons.Outlined.Edit, "Editar grupo") }
                 IconButton(onClick = { deleting = true }) { Icon(Icons.Outlined.Delete, "Borrar grupo") }
             },
@@ -87,9 +92,10 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp)) {
+                        val (gbg, gfg) = groupColors(g.color)
+                        Surface(shape = RoundedCornerShape(18.dp), color = gbg, modifier = Modifier.size(56.dp)) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(if (allFrozen) Icons.Filled.AcUnit else groupIcon(g.icon), null, tint = MaterialTheme.colorScheme.onPrimary)
+                                Icon(if (allFrozen) Icons.Filled.AcUnit else groupIcon(g.icon), null, tint = gfg)
                             }
                         }
                         Spacer(Modifier.width(16.dp))
@@ -128,8 +134,11 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
                     AppTile(vm, e.pkg, e.label, e.frozen, pending = false,
                         onTap = { vm.toggle(e.pkg) },
                         menu = listOf(
-                            "Abrir" to { vm.launch(e.pkg) },
-                            (if (e.frozen) "Activar" else "Congelar") to { vm.toggle(e.pkg) },
+                            "Abrir" to { vm.launch(e.pkg); Unit },
+                            (if (e.frozen) "Activar" else "Congelar") to { vm.toggle(e.pkg); Unit },
+                            "Ficha de la app" to { openApp(e.pkg) },
+                            (if (e.pkg in config.favorites) "Quitar de favoritas" else "Agregar a favoritas") to { vm.toggleFavorite(e.pkg) },
+                            "Acceso directo para abrirla" to { app.qarentenapp.core.Shortcuts.pinApp(ctx, e.pkg); Unit },
                             "Quitar del grupo" to { vm.removeFromGroup(g.id, e.pkg) },
                         ))
                 }
@@ -174,8 +183,8 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
         }
     }
 
-    if (editing) GroupDialog("Editar grupo", g.name, g.icon, onDismiss = { editing = false }) { n, i ->
-        editing = false; vm.updateGroup(g.id, n, i)
+    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }) { n, i, c ->
+        editing = false; vm.updateGroup(g.id, n, i, c)
     }
     if (deleting) AlertDialog(
         onDismissRequest = { deleting = false },

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Q\'App</string>
+    <string name="widget_desc">Congelá o activá un grupo o una app de un toque</string>
+    <string name="tile_drawer">Cajón de cuarentena</string>
+    <string name="tile_quick">Menú rápido</string>
 </resources>

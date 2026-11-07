@@ -5,5 +5,28 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/qapp_navy</item>
     </style>
+
+    <!-- Ventanas flotantes: cajón de cuarentena, menú rápido, accesos directos -->
+    <style name="Theme.QApp.Translucent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.45</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Accesos directos sin interfaz -->
+    <style name="Theme.QApp.NoDisplay" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
     <color name="qapp_navy">#001A5C</color>
+    <color name="qapp_blue">#2F5E8E</color>
+    <color name="qapp_ice">#3FD0F5</color>
 </resources>

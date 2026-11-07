@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +40,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -51,23 +52,43 @@ import app.qarentenapp.R
 @Composable
 fun QRoot(vm: MainViewModel) {
     val loaded by vm.loaded.collectAsState()
+    val locked by vm.locked.collectAsState()
+    val config by vm.config.collectAsState()
     if (!loaded) { Splash(); return }
+    if (locked && config.settings.protectionEnabled && config.settings.passwordHash != null) {
+        LockScreen(onUnlock = vm::unlock); return
+    }
 
     val nav = rememberNavController()
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snack.showSnackbar(it) } }
 
+    // Restaurar backup
     val pendingImport by vm.pendingImport.collectAsState()
-    if (pendingImport != null) {
-        val n = pendingImport!!.quarantined.size
+    pendingImport?.let { imp ->
         AlertDialog(
             onDismissRequest = { vm.cancelImport() },
             title = { Text("Restaurar backup") },
             text = {
-                Text("Se van a reemplazar tus grupos y ajustes por los del backup (${pendingImport!!.groups.size} grupos).\n\n¿Querés además volver a congelar las $n apps que tenías en cuarentena?")
+                Text("Se van a reemplazar tus grupos, favoritas y ajustes por los del backup (${imp.groups.size} grupos).\n\n¿Querés además volver a congelar las ${imp.quarantined.size} apps que tenías en cuarentena?")
             },
             confirmButton = { TextButton(onClick = { vm.confirmImport(true) }) { Text("Restaurar y congelar") } },
             dismissButton = { TextButton(onClick = { vm.confirmImport(false) }) { Text("Solo restaurar") } },
+        )
+    }
+
+    // Apps que deberían estar en cuarentena (reseteo, restauración o actualización)
+    val requarantine by vm.requarantine.collectAsState()
+    if (requarantine.isNotEmpty()) {
+        val names = requarantine.take(6).joinToString(", ") { vm.labelOf(it) } + if (requarantine.size > 6) "…" else ""
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Restaurar cuarentena") },
+            text = {
+                Text("Estas apps estaban en cuarentena y ahora están activas (por un reseteo del sistema o una actualización):\n\n$names\n\n¿Las volvés a poner en cuarentena?")
+            },
+            confirmButton = { TextButton(onClick = { vm.confirmRequarantine(true) }) { Text("Sí, congelar") } },
+            dismissButton = { TextButton(onClick = { vm.confirmRequarantine(false) }) { Text("No, dejarlas activas") } },
         )
     }
 
@@ -86,22 +107,31 @@ fun QRoot(vm: MainViewModel) {
         },
     ) { pad ->
         NavHost(nav, startDestination = "groups", modifier = Modifier.padding(pad)) {
-            composable("groups") { GroupsScreen(vm, open = { nav.navigate("group/$it") }) }
-            composable("apps") { AppsScreen(vm) }
+            composable("groups") {
+                GroupsScreen(vm,
+                    open = { nav.navigate("group/$it") },
+                    created = { nav.navigate("group/$it"); nav.navigate("pick/$it") },
+                    openApp = { nav.navigate("app/$it") })
+            }
+            composable("apps") { AppsScreen(vm, openApp = { nav.navigate("app/$it") }) }
             composable("settings") { SettingsScreen(vm) }
             composable("group/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 val id = it.arguments?.getString("id") ?: return@composable
-                GroupScreen(vm, id, back = { nav.popBackStack() }, pick = { nav.navigate("pick/$id") })
+                GroupScreen(vm, id, back = { nav.popBackStack() }, pick = { nav.navigate("pick/$id") }, openApp = { p -> nav.navigate("app/$p") })
             }
             composable("pick/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
                 val id = it.arguments?.getString("id") ?: return@composable
                 PickAppsScreen(vm, id, done = { nav.popBackStack() })
             }
+            composable("app/{pkg}", arguments = listOf(navArgument("pkg") { type = NavType.StringType })) {
+                val pkg = it.arguments?.getString("pkg") ?: return@composable
+                AppDetailScreen(vm, pkg, back = { nav.popBackStack() })
+            }
         }
     }
 }
 
-private fun androidx.navigation.NavController.tab(route: String) = navigate(route) {
+private fun NavController.tab(route: String) = navigate(route) {
     popUpTo("groups") { saveState = true }
     launchSingleTop = true
     restoreState = true
@@ -140,8 +170,6 @@ fun BrandMark() {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Image(painterResource(R.drawable.logo_candado), contentDescription = null, modifier = Modifier.height(28.dp))
         Spacer(Modifier.width(8.dp))
-        Text(
-            buildBrand(), fontSize = 16.sp,
-        )
+        Text(buildBrand(), fontSize = 16.sp)
     }
 }

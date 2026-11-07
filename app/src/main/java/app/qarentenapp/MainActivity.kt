@@ -36,6 +36,11 @@ class MainActivity : ComponentActivity() {
         vm.onResume()
     }
 
+    override fun onStop() {
+        super.onStop()
+        vm.onStop()
+    }
+
     override fun onDestroy() {
         Shizuku.removeRequestPermissionResultListener(shizukuListener)
         Shizuku.removeBinderReceivedListener(binderListener)
