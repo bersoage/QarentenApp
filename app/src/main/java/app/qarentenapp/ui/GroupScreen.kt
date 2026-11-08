@@ -251,6 +251,7 @@ private fun AppRow(
     onOpen: () -> Unit,
     onToggle: () -> Unit,
     menu: List<Pair<String, () -> Unit>>,
+    others: List<String> = emptyList(),
 ) {
     var open by rememberSaveable(e.pkg) { mutableStateOf(false) }
     val system = e.isSystem && !e.protected
