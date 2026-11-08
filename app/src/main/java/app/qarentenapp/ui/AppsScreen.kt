@@ -60,6 +60,21 @@ private enum class Filter(val label: String) {
     USER("Usuario"), UNGROUPED("Desagrupadas"), FROZEN("Congeladas"), ACTIVE("Activas"), SYSTEM("Sistema")
 }
 
+/** Minúsculas y sin tildes, para buscar sin importar cómo se escribió. */
+fun normSearch(t: String): String =
+    java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
+
+/** Nombres de los grupos que contienen la app (menos [except]). */
+fun groupNamesOf(groups: List<app.qarentenapp.data.Group>, pkg: String, except: String? = null): List<String> =
+    groups.filter { pkg in it.packages && it.id != except }.map { it.name }
+
+/** "Grupos: Shoping, Redes +2" (muestra hasta 3 nombres). */
+fun groupsText(names: List<String>): String? {
+    if (names.isEmpty()) return null
+    val shown = names.take(3).joinToString(", ")
+    return "Grupos: $shown" + if (names.size > 3) " +${names.size - 3}" else ""
+}
+
 @Composable
 private fun rememberFiltered(vm: MainViewModel, query: String, filters: Set<Filter>, perms: Set<String>): List<AppEntry> {
     val apps by vm.apps.collectAsState()
@@ -67,8 +82,10 @@ private fun rememberFiltered(vm: MainViewModel, query: String, filters: Set<Filt
     val permMap by vm.perms.collectAsState()
     val s = config.settings
     val grouped = remember(config.groups) { config.groups.flatMap { it.packages }.toSet() }
-    return remember(apps, query, filters, s.showServices, grouped, perms, permMap) {
-        val q = query.trim().lowercase()
+    return remember(apps, query, filters, s.showServices, grouped, perms, permMap, config.groups) {
+        val q = normSearch(query.trim())
+        // Apps que están en un grupo cuyo nombre coincide con lo buscado
+        val inMatchingGroup = if (q.isEmpty()) emptySet() else config.groups.filter { normSearch(it.name).contains(q) }.flatMap { it.packages }.toSet()
         val wanted = PermCategory.entries.filter { it.name in perms }
         // Cada botón se prende y se apaga solo. Dentro de una misma fila se suman; entre filas se combinan.
         val user = Filter.USER in filters; val system = Filter.SYSTEM in filters
@@ -87,7 +104,7 @@ private fun rememberFiltered(vm: MainViewModel, query: String, filters: Set<Filt
                 else -> !a.frozen
             }
             typeOk && stateOk && (!ungrouped || a.pkg !in grouped) &&
-                (q.isEmpty() || a.label.lowercase().contains(q) || a.pkg.contains(q)) &&
+                (q.isEmpty() || normSearch(a.label).contains(q) || a.pkg.contains(q) || a.pkg in inMatchingGroup) &&
                 (wanted.isEmpty() || permMap?.get(a.pkg)?.let { p -> wanted.any { c -> p.any { it in c.perms } } } == true)
         }
     }
@@ -245,7 +262,7 @@ fun AppsScreen(vm: MainViewModel, openApp: (String) -> Unit) {
                     ) {
                         AppIcon(vm, a.pkg, 44.dp, frozen = a.frozen)
                         Spacer(Modifier.width(14.dp))
-                        AppLabel(a, config.settings.showPackageName, a.pkg in config.favorites, Modifier.weight(1f))
+                        AppLabel(a, config.settings.showPackageName, a.pkg in config.favorites, Modifier.weight(1f), groupNamesOf(config.groups, a.pkg))
                         if (a.protected) Icon(Icons.Outlined.Lock, "Protegida", tint = MaterialTheme.colorScheme.outline)
                         else Switch(
                             checked = a.frozen, onCheckedChange = { vm.toggle(a.pkg) },
@@ -280,7 +297,7 @@ fun AppsScreen(vm: MainViewModel, openApp: (String) -> Unit) {
 }
 
 @Composable
-fun AppLabel(a: AppEntry, showPkg: Boolean, favorite: Boolean, modifier: Modifier) {
+fun AppLabel(a: AppEntry, showPkg: Boolean, favorite: Boolean, modifier: Modifier, groups: List<String> = emptyList()) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(a.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
@@ -290,7 +307,8 @@ fun AppLabel(a: AppEntry, showPkg: Boolean, favorite: Boolean, modifier: Modifie
         val parts = buildList {
             if (a.protected) add("Protegida")
             else if (a.isSystem) add(if (a.hasLauncher) "⚠️ App del sistema · cuidado" else "⚠️ Servicio del sistema · cuidado")
-            if (a.frozen) add("Congelada")
+            if (a.frozen) add("Congelada") else if (groups.isNotEmpty() && !a.isSystem) add("Activa")
+            groupsText(groups)?.let { add(it) }
             if (showPkg) add(a.pkg)
         }
         if (parts.isNotEmpty()) Text(
@@ -336,7 +354,7 @@ fun PickAppsScreen(vm: MainViewModel, groupId: String, done: () -> Unit) {
                 ) {
                     AppIcon(vm, a.pkg, 40.dp, frozen = a.frozen)
                     Spacer(Modifier.width(14.dp))
-                    AppLabel(a, config.settings.showPackageName, a.pkg in config.favorites, Modifier.weight(1f))
+                    AppLabel(a, config.settings.showPackageName, a.pkg in config.favorites, Modifier.weight(1f), groupNamesOf(config.groups, a.pkg))
                     Checkbox(checked = checked, onCheckedChange = { selected = if (it) selected + a.pkg else selected - a.pkg })
                 }
             }

@@ -158,6 +158,7 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
                 AppRow(
                     vm, e,
                     onOpen = { vm.launch(e.pkg) },
+                    others = groupNamesOf(config.groups, e.pkg, g.id),
                     onToggle = { vm.toggle(e.pkg, g.id) },
                     menu = listOf(
                         "Abrir" to { vm.launch(e.pkg); Unit },
@@ -218,6 +219,7 @@ private fun AppTile(
     pending: Boolean,
     onTap: () -> Unit,
     menu: List<Pair<String, () -> Unit>>,
+    others: List<String> = emptyList(),
 ) {
     var open by rememberSaveable(pkg) { mutableStateOf(false) }
     Box {
@@ -271,7 +273,7 @@ private fun AppRow(
                             system -> "Activa · app del sistema, cuidado"
                             e.frozen -> "Congelada"
                             else -> "Activa"
-                        },
+                        } + (groupsText(others)?.let { " · $it" } ?: ""),
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
