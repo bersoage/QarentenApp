@@ -77,8 +77,10 @@ object Widgets {
             }
             else -> {
                 val f = map[conf.target]?.frozen ?: Repo.source.isFrozen(conf.target)
-                val b = runCatching { Bitmaps.app(conf.target, f, 192) }.getOrNull()
-                Triple(Repo.labelOf(conf.target), f, if (b != null && f && !conf.hideStatus) Bitmaps.withFrozenBadge(b) else b)
+                val b = runCatching {
+                    if (conf.hideStatus) Bitmaps.app(conf.target, f, 192) else Bitmaps.appWidget(conf.target, f, 192)
+                }.getOrNull()
+                Triple(Repo.labelOf(conf.target), f, b)
             }
         }
         if (bitmap != null) rv.setImageViewBitmap(R.id.w_icon, bitmap) else rv.setImageViewResource(R.id.w_icon, R.drawable.logo_candado)

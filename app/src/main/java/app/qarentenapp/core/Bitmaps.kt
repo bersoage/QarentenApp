@@ -9,6 +9,9 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.BitmapFactory
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -57,6 +60,61 @@ object Bitmaps {
         val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         Canvas(out).drawBitmap(src, 0f, 0f, greyPaint)
         return out
+    }
+
+    /**
+     * Ícono de app para widgets, con el estado dibujado:
+     * activa = ícono a color + candado abierto en la esquina; congelada = ícono gris con escarcha,
+     * carámbanos y copo ❄️. Todo queda dentro de la imagen.
+     */
+    fun appWidget(pkg: String, frozen: Boolean, size: Int = 192): Bitmap {
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        val s = size.toFloat()
+        val side = (s * 0.80f).toInt().coerceAtLeast(48)
+        val src = Repo.source.loadIconBitmap(pkg, side) ?: Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        val left = s * 0.0f; val top = s * 0.02f
+        if (!frozen) {
+            c.drawBitmap(src, left, top, paint)
+            val opts = BitmapFactory.Options().apply { inScaled = false }
+            runCatching { BitmapFactory.decodeResource(Repo.ctx.resources, R.drawable.candado_abierto, opts) }.getOrNull()?.let { lock ->
+                val h = s * 0.50f; val w = h * lock.width / lock.height
+                c.drawBitmap(lock, null, RectF(s - w, s - h, s, s), paint)
+            }
+            return out
+        }
+        // Congelada: ícono gris + escarcha recortada a la silueta del ícono
+        val layer = c.saveLayer(0f, 0f, s, s, null)
+        c.drawBitmap(src, left, top, greyPaint)
+        val frost = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
+        val rnd = Random(pkg.hashCode())
+        val w = side.toFloat()
+        val x0 = left; val y0 = top
+        val capH = w * 0.12f
+        val ice = Path()
+        ice.moveTo(x0, y0 - 2f); ice.lineTo(x0 + w, y0 - 2f); ice.lineTo(x0 + w, y0 + capH)
+        var x = 1f
+        while (x > 0f) { x -= 0.05f; ice.lineTo(x0 + x.coerceAtLeast(0f) * w, y0 + capH + (rnd.nextFloat() - 0.5f) * w * 0.03f) }
+        ice.close()
+        val n = 9
+        for (i in 0 until n) {
+            val cx = x0 + w * (0.06f + i * 0.88f / (n - 1)) + (rnd.nextFloat() - 0.5f) * w * 0.02f
+            val len = w * listOf(0.08f, 0.12f, 0.17f, 0.21f, 0.14f).random(rnd)
+            val hw = w * (0.028f + rnd.nextFloat() * 0.012f)
+            val p = Path()
+            p.moveTo(cx - hw, y0 + capH - 2f); p.lineTo(cx + hw, y0 + capH - 2f); p.lineTo(cx, y0 + capH + len); p.close()
+            ice.addPath(p)
+        }
+        frost.color = 0xF0ECF6FF.toInt()
+        c.drawPath(ice, frost)
+        // puntitos de nieve sobre el ícono
+        frost.color = 0xB4FFFFFF.toInt()
+        repeat(14) {
+            val px = x0 + rnd.nextFloat() * w; val py = y0 + w * (0.28f + rnd.nextFloat() * 0.7f)
+            c.drawCircle(px, py, w * (0.008f + rnd.nextFloat() * 0.014f), frost)
+        }
+        c.restoreToCount(layer)
+        return withFrozenBadge(out)
     }
 
     /** Agrega el copo ❄️ de "congelada" en la esquina, dentro de la propia imagen. */

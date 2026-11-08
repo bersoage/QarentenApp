@@ -30,15 +30,20 @@ jobs:
           gradle :app:assembleRelease --console=plain 2>&1 | tee build.log
 
       - name: Renombrar
-        run: cp app/build/outputs/apk/release/app-release.apk QarentenApp-beta-${{ github.run_number }}.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk QarentenApp-beta-${{ github.run_number }}.apk
+          cp app/build/outputs/apk/release/app-release.apk QarentenApp.apk
 
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: beta-${{ github.run_number }}
           name: QarentenApp beta ${{ github.run_number }}
-          prerelease: true
-          files: QarentenApp-beta-${{ github.run_number }}.apk
+          prerelease: false
+          make_latest: true
+          files: |
+            QarentenApp-beta-${{ github.run_number }}.apk
+            QarentenApp.apk
           body: |
             Beta de prueba. Bajá el .apk desde el celular e instalalo encima de la anterior.
             Commit: ${{ github.sha }}
