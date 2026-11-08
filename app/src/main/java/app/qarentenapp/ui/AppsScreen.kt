@@ -61,35 +61,56 @@ private enum class Filter(val label: String) {
 }
 
 @Composable
-private fun rememberFiltered(vm: MainViewModel, query: String, filter: Filter, perms: Set<String>): List<AppEntry> {
+private fun rememberFiltered(vm: MainViewModel, query: String, filters: Set<Filter>, perms: Set<String>): List<AppEntry> {
     val apps by vm.apps.collectAsState()
     val config by vm.config.collectAsState()
     val permMap by vm.perms.collectAsState()
     val s = config.settings
     val grouped = remember(config.groups) { config.groups.flatMap { it.packages }.toSet() }
-    return remember(apps, query, filter, s.showServices, grouped, perms, permMap) {
+    return remember(apps, query, filters, s.showServices, grouped, perms, permMap) {
         val q = query.trim().lowercase()
         val wanted = PermCategory.entries.filter { it.name in perms }
+        // Cada botón se prende y se apaga solo. Dentro de una misma fila se suman; entre filas se combinan.
+        val user = Filter.USER in filters; val system = Filter.SYSTEM in filters
+        val frozen = Filter.FROZEN in filters; val active = Filter.ACTIVE in filters
+        val ungrouped = Filter.UNGROUPED in filters
         apps.filter { a ->
-            when (filter) {
-                Filter.USER -> !a.isSystem
-                Filter.UNGROUPED -> !a.isSystem && a.pkg !in grouped
-                Filter.FROZEN -> !a.isSystem && a.frozen
-                Filter.ACTIVE -> !a.isSystem && !a.frozen
-                Filter.SYSTEM -> a.isSystem && (a.hasLauncher || s.showServices)
-            } &&
+            val sysVisible = a.isSystem && (a.hasLauncher || s.showServices)
+            val typeOk = when {
+                user == system -> !a.isSystem || sysVisible
+                user -> !a.isSystem
+                else -> sysVisible
+            }
+            val stateOk = when {
+                frozen == active -> true
+                frozen -> a.frozen
+                else -> !a.frozen
+            }
+            typeOk && stateOk && (!ungrouped || a.pkg !in grouped) &&
                 (q.isEmpty() || a.label.lowercase().contains(q) || a.pkg.contains(q)) &&
                 (wanted.isEmpty() || permMap?.get(a.pkg)?.let { p -> wanted.any { c -> p.any { it in c.perms } } } == true)
         }
     }
 }
 
+/** Resumen de la combinación elegida: "Usuario · activas · sin grupo". */
+private fun summary(filters: Set<Filter>): String {
+    val parts = mutableListOf<String>()
+    val user = Filter.USER in filters; val system = Filter.SYSTEM in filters
+    parts += when { user && !system -> "Usuario"; system && !user -> "Sistema"; else -> "Usuario y sistema" }
+    val frozen = Filter.FROZEN in filters; val active = Filter.ACTIVE in filters
+    if (frozen != active) parts += if (frozen) "congeladas" else "activas"
+    if (Filter.UNGROUPED in filters) parts += "sin grupo"
+    return parts.joinToString(" · ")
+}
+
 @Composable
 private fun SearchAndFilters(
     vm: MainViewModel,
     query: String, onQuery: (String) -> Unit,
-    filter: Filter, onFilter: (Filter) -> Unit,
+    filters: Set<Filter>, onFilters: (Set<Filter>) -> Unit,
     permCount: Int, onPerms: () -> Unit,
+    count: Int,
 ) {
     val config by vm.config.collectAsState()
     var warn by remember { mutableStateOf(false) }
@@ -114,8 +135,11 @@ private fun SearchAndFilters(
                 if (f == Filter.SYSTEM) {
                     val red = androidx.compose.ui.graphics.Color(0xFFB3261E)
                     FilterChip(
-                        selected = filter == f,
-                        onClick = { if (filter != f && !config.settings.systemFilterWarned) warn = true else onFilter(f) },
+                        selected = f in filters,
+                        onClick = {
+                            if (f !in filters && !config.settings.systemFilterWarned) warn = true
+                            else onFilters(if (f in filters) filters - f else filters + f)
+                        },
                         label = { Text(f.label) },
                         colors = FilterChipDefaults.filterChipColors(
                             labelColor = androidx.compose.ui.graphics.Color(0xFFFF8C82),
@@ -123,16 +147,20 @@ private fun SearchAndFilters(
                             selectedLabelColor = androidx.compose.ui.graphics.Color.White,
                         ),
                         border = FilterChipDefaults.filterChipBorder(
-                            enabled = true, selected = filter == f,
+                            enabled = true, selected = f in filters,
                             borderColor = red, selectedBorderColor = red, borderWidth = 1.5.dp,
                         ),
                     )
-                } else FilterChip(selected = filter == f, onClick = { onFilter(f) }, label = { Text(f.label) })
+                } else FilterChip(
+                    selected = f in filters,
+                    onClick = { onFilters(if (f in filters) filters - f else filters + f) },
+                    label = { Text(f.label) },
+                )
             }
         }
-        if (permCount > 0) Text(
-            "Filtrando por $permCount ${if (permCount == 1) "permiso" else "permisos"}",
-            fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+        Text(
+            summary(filters) + (if (permCount > 0) " · $permCount ${if (permCount == 1) "permiso" else "permisos"}" else "") + " — $count",
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
     if (warn) {
@@ -155,7 +183,7 @@ private fun SearchAndFilters(
                 TextButton(onClick = {
                     warn = false
                     if (dontShow) vm.updateSettings { it.copy(systemFilterWarned = true) }
-                    onFilter(Filter.SYSTEM)
+                    onFilters(filters + Filter.SYSTEM)
                 }) { Text("Entiendo, mostrar") }
             },
             dismissButton = { TextButton(onClick = { warn = false }) { Text("Cancelar") } },
@@ -193,16 +221,16 @@ private fun PermsDialog(selected: Set<String>, onDismiss: () -> Unit, onApply: (
 fun AppsScreen(vm: MainViewModel, openApp: (String) -> Unit) {
     val ctx = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(Filter.USER) }
+    var filters by rememberSaveable { mutableStateOf(setOf(Filter.USER)) }
     var perms by rememberSaveable { mutableStateOf(setOf<String>()) }
     var permsDialog by rememberSaveable { mutableStateOf(false) }
     val config by vm.config.collectAsState()
-    val list = rememberFiltered(vm, query, filter, perms)
+    val list = rememberFiltered(vm, query, filters, perms)
 
     Column {
         Text("Todas las apps", fontSize = 28.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp))
-        SearchAndFilters(vm, query, { query = it }, filter, { filter = it }, perms.size,
+        SearchAndFilters(vm, query, { query = it }, filters, { filters = it }, perms.size, count = list.size,
             onPerms = { vm.loadPermissions(); permsDialog = true })
         LazyColumn {
             items(list, key = { it.pkg }) { a ->
@@ -281,10 +309,10 @@ fun PickAppsScreen(vm: MainViewModel, groupId: String, done: () -> Unit) {
     if (g == null) { androidx.compose.runtime.LaunchedEffect(Unit) { done() }; return }
     var selected by rememberSaveable { mutableStateOf(g.packages.toList()) }
     var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(Filter.USER) }
+    var filters by rememberSaveable { mutableStateOf(setOf(Filter.USER)) }
     var perms by rememberSaveable { mutableStateOf(setOf<String>()) }
     var permsDialog by rememberSaveable { mutableStateOf(false) }
-    val list = rememberFiltered(vm, query, filter, perms)
+    val list = rememberFiltered(vm, query, filters, perms)
 
     Column {
         TopAppBar(
@@ -294,7 +322,7 @@ fun PickAppsScreen(vm: MainViewModel, groupId: String, done: () -> Unit) {
                 TextButton(onClick = { vm.setGroupApps(groupId, selected); done() }) { Text("Listo (${selected.size})") }
             },
         )
-        SearchAndFilters(vm, query, { query = it }, filter, { filter = it }, perms.size,
+        SearchAndFilters(vm, query, { query = it }, filters, { filters = it }, perms.size, count = list.size,
             onPerms = { vm.loadPermissions(); permsDialog = true })
         LazyColumn {
             items(list, key = { it.pkg }) { a ->
