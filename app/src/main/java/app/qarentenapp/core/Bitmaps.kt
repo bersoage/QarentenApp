@@ -59,6 +59,23 @@ object Bitmaps {
         return out
     }
 
+    /** Agrega el copo ❄️ de "congelada" en la esquina, dentro de la propia imagen. */
+    fun withFrozenBadge(src: Bitmap): Bitmap {
+        val out = src.copy(Bitmap.Config.ARGB_8888, true)
+        val c = Canvas(out)
+        val s = out.width.toFloat()
+        val r = s * 0.19f
+        val cx = s - r - s * 0.01f; val cy = out.height - r - s * 0.01f
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2F5E8E.toInt() })
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = s * 0.025f; color = Color.WHITE })
+        font()?.let { tf ->
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = tf; color = Color.WHITE; textSize = r * 1.35f; textAlign = Paint.Align.CENTER }
+            val fm = p.fontMetrics
+            c.drawText("\ueb3b", cx, cy - (fm.ascent + fm.descent) / 2, p)
+        }
+        return out
+    }
+
     private fun mix(c: Int, other: Int, t: Float): Int {
         fun ch(a: Int, b: Int) = (a + (b - a) * t).toInt().coerceIn(0, 255)
         return Color.rgb(ch(Color.red(c), Color.red(other)), ch(Color.green(c), Color.green(other)), ch(Color.blue(c), Color.blue(other)))

@@ -6,7 +6,7 @@
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_small"
-    android:previewImage="@drawable/logo_candado"
+    android:previewImage="@drawable/widget_prev_app"
     android:configure="app.qarentenapp.ui.WidgetConfigActivity"
     android:widgetFeatures="reconfigurable"
     android:resizeMode="none"

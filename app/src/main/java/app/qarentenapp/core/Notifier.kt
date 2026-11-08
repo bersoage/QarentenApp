@@ -123,7 +123,7 @@ object Notifier {
             val row = RemoteViews(context.packageName, R.layout.notif_row)
             runCatching { row.setImageViewBitmap(R.id.r_icon, Bitmaps.app(p, frozen, 96)) }
             row.setTextViewText(R.id.r_label, Repo.labelOf(p))
-            row.setTextViewText(R.id.r_action, if (frozen) "ACTIVAR" else "CONGELAR")
+            row.setTextViewText(R.id.r_action, if (frozen) "🔥 Descongelar" else "❄️ Congelar")
             row.setOnClickPendingIntent(R.id.r_action, broadcast(context, ACTION_TOGGLE, p, 200 + i))
             row.setOnClickPendingIntent(R.id.r_root, launch(context, p, 300 + i))
             rv.addView(R.id.n_list, row)

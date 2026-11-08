@@ -77,22 +77,17 @@ object Widgets {
             }
             else -> {
                 val f = map[conf.target]?.frozen ?: Repo.source.isFrozen(conf.target)
-                Triple(Repo.labelOf(conf.target), f, runCatching { Bitmaps.app(conf.target, f) }.getOrNull())
+                val b = runCatching { Bitmaps.app(conf.target, f, 192) }.getOrNull()
+                Triple(Repo.labelOf(conf.target), f, if (b != null && f && !conf.hideStatus) Bitmaps.withFrozenBadge(b) else b)
             }
         }
         if (bitmap != null) rv.setImageViewBitmap(R.id.w_icon, bitmap) else rv.setImageViewResource(R.id.w_icon, R.drawable.logo_candado)
         rv.setTextViewText(R.id.w_label, label)
         rv.setViewVisibility(R.id.w_label, if (conf.hideCaption) View.GONE else View.VISIBLE)
-        rv.setViewVisibility(R.id.w_status, if (!conf.hideStatus && frozen) View.VISIBLE else View.GONE)
-        // El ícono de grupo ya trae su propio fondo con carámbanos
-        rv.setInt(R.id.w_root, "setBackgroundResource", when {
-            conf.blackBackground -> R.drawable.widget_bg_black
-            conf.kind == "group" -> android.R.color.transparent
-            else -> R.drawable.widget_bg_light
-        })
-        if (conf.kind == "group") rv.setViewVisibility(R.id.w_status, android.view.View.GONE)
-        // Sobre el fondo de pantalla (grupo sin fondo) el nombre va en blanco, como en el launcher
-        rv.setTextColor(R.id.w_label, if (conf.blackBackground || conf.kind == "group") 0xFFFFFFFF.toInt() else 0xFF14202C.toInt())
+        // El estado va dibujado en la imagen; el widget no tiene fondo propio (como un ícono del launcher)
+        rv.setViewVisibility(R.id.w_status, View.GONE)
+        rv.setInt(R.id.w_root, "setBackgroundResource",
+            if (conf.blackBackground) R.drawable.widget_bg_black else android.R.color.transparent)
 
         val tap = Intent(context, ActionActivity::class.java)
             .setAction(ActionActivity.ACTION_WIDGET)

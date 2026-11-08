@@ -27,5 +27,5 @@
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:textStyle="bold"
-        android:textColor="#FF2F5E8E" />
+        android:textColor="@color/notif_action" />
 </LinearLayout>
