@@ -11,6 +11,8 @@ data class Group(
     /** Tema (color) del grupo: índice en la paleta. */
     val color: Int = 0,
     val packages: List<String> = emptyList(),
+    /** Protección: 0 = ninguna, 1 = todo el grupo (se pide al entrar), 2 = solo «Congelar/Descongelar todas» y los toques de un solo paso. */
+    val lockMode: Int = 0,
 )
 
 @Serializable
@@ -62,6 +64,10 @@ data class AppSettings(
     val protectionEnabled: Boolean = false,
     val passwordHash: String? = null,
     val passwordSalt: String? = null,
+    /** Cómo se desbloquean los grupos protegidos: BOTH (huella o contraseña), BIOMETRIC o PASSWORD. */
+    val lockMethod: String = "BOTH",
+    /** Minutos que dura el desbloqueo de un grupo; 0 = hasta que salís del grupo. */
+    val unlockMinutes: Int = 0,
     // Actualizaciones
     val monitorUpdates: Boolean = true,
     val autoRequarantine: Boolean = false,

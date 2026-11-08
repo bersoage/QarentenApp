@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.qarentenapp.core.Freezer
+import app.qarentenapp.core.GroupLock
 import app.qarentenapp.core.Mode
 import app.qarentenapp.core.Repo
 import app.qarentenapp.core.Security
@@ -29,6 +30,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val icons = IconCache()
 
     val config = Repo.config
+    /** Pedidos de huella o contraseña para grupos protegidos. */
+    val auth = AuthState()
     val apps = Repo.apps
     val mode = Repo.mode
     val busy = Repo.busy
@@ -120,12 +123,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (sys.isEmpty()) run() else _confirm.value = SystemConfirm(pkgs, sys, run)
     }
 
-    fun toggle(pkg: String) {
+    /**
+     * [fromGroup]: grupo desde cuya pantalla se toca la app. Ahí manda solo ese grupo (ya te autenticaste al entrar);
+     * desde cualquier otro lado se pide autenticación si la app está en un grupo protegido bloqueado.
+     */
+    fun toggle(pkg: String, fromGroup: String? = null) {
         val e = Repo.appMap()[pkg] ?: return
-        guarded(listOf(pkg), !e.frozen)
+        val go = { guarded(listOf(pkg), !e.frozen) }
+        if (fromGroup == null && GroupLock.needsForApps(listOf(pkg))) auth.ask("Desbloquear ${Repo.labelOf(pkg)}") { go() } else go()
     }
-    fun setFrozen(pkgs: List<String>, frozen: Boolean) = guarded(pkgs, frozen)
-    fun setGroupFrozen(g: Group, frozen: Boolean) = guarded(g.packages, frozen)
+    fun setFrozen(pkgs: List<String>, frozen: Boolean) {
+        if (GroupLock.needsForApps(pkgs)) auth.ask("Desbloquear apps protegidas") { guarded(pkgs, frozen) } else guarded(pkgs, frozen)
+    }
+    fun setGroupFrozen(g: Group, frozen: Boolean) {
+        val cur = Repo.config.value.groups.firstOrNull { it.id == g.id } ?: g
+        if (GroupLock.needsForGroup(cur)) auth.ask("Desbloquear «${cur.name}»") { GroupLock.grant(cur.id); guarded(cur.packages, frozen) }
+        else guarded(cur.packages, frozen)
+    }
     fun launch(pkg: String) = viewModelScope.launch { Repo.launch(pkg) }
     fun openStore(pkg: String) = Repo.openStore(pkg)
 
@@ -148,14 +162,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- Grupos ----------------
 
-    fun createGroup(name: String, icon: String, color: Int): String {
-        val g = Group(id = UUID.randomUUID().toString(), name = name.trim(), icon = icon, color = color)
+    fun createGroup(name: String, icon: String, color: Int, lockMode: Int = 0): String {
+        val g = Group(id = UUID.randomUUID().toString(), name = name.trim(), icon = icon, color = color, lockMode = lockMode)
         Repo.update { it.copy(groups = it.groups + g) }
         return g.id
     }
 
-    fun updateGroup(id: String, name: String, icon: String, color: Int) =
-        editGroup(id) { it.copy(name = name.trim(), icon = icon, color = color) }
+    fun updateGroup(id: String, name: String, icon: String, color: Int, lockMode: Int = 0) =
+        editGroup(id) { it.copy(name = name.trim(), icon = icon, color = color, lockMode = lockMode) }
 
     fun setGroupApps(id: String, pkgs: List<String>) = editGroup(id) { it.copy(packages = pkgs.distinct()) }
     fun addToGroup(id: String, pkg: String) = editGroup(id) { it.copy(packages = (it.packages + pkg).distinct()) }
@@ -222,7 +236,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Repo.say("Contraseña guardada")
     }
 
-    fun disableProtection() = updateSettings { it.copy(protectionEnabled = false, passwordHash = null, passwordSalt = null) }
+    /** Apaga el bloqueo de la app; la contraseña queda guardada porque los grupos protegidos también la usan. */
+    fun disableProtection() = updateSettings { it.copy(protectionEnabled = false) }
+
+    /** Contraseña solo para los grupos protegidos (no bloquea la app entera). */
+    fun setGroupPassword(password: String) {
+        val salt = Security.newSalt()
+        updateSettings { it.copy(passwordSalt = salt, passwordHash = Security.hash(password, salt)) }
+        Repo.say("Contraseña guardada")
+    }
+
+    fun hasPassword() = Repo.config.value.settings.passwordHash != null
 
     // ---------------- Backup ----------------
 

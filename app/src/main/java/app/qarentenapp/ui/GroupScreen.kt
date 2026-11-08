@@ -67,6 +67,16 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
     val apps by vm.apps.collectAsState()
     val g = config.groups.firstOrNull { it.id == id }
     if (g == null) { androidx.compose.runtime.LaunchedEffect(Unit) { back() }; return }
+    // Grupo protegido: una sola autenticación al entrar; adentro nada vuelve a pedirse
+    var allowed by androidx.compose.runtime.remember(id) { mutableStateOf(!app.qarentenapp.core.GroupLock.needsEntry(g)) }
+    if (!allowed) {
+        androidx.compose.runtime.LaunchedEffect(id) {
+            vm.auth.ask("Desbloquear «${g.name}»", onDenied = back) { app.qarentenapp.core.GroupLock.enter(id); allowed = true }
+        }
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth())
+        return
+    }
+    androidx.compose.runtime.DisposableEffect(id) { onDispose { app.qarentenapp.core.GroupLock.leave(id) } }
     val map = apps.associateBy { it.pkg }
     val installed = g.packages.mapNotNull { map[it] }
     val pending = g.packages.filter { it !in map }
@@ -101,7 +111,8 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
                             fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            "${installed.size - frozenCount} activas" + if (pending.isNotEmpty()) " · ${pending.size} pendientes" else "",
+                            "${installed.size - frozenCount} activas" + (if (pending.isNotEmpty()) " · ${pending.size} pendientes" else "") +
+                                when (g.lockMode) { 1 -> " · 🔒 protegido"; 2 -> " · 🔒 «todas» protegido"; else -> "" },
                             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -147,10 +158,10 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
                 AppRow(
                     vm, e,
                     onOpen = { vm.launch(e.pkg) },
-                    onToggle = { vm.toggle(e.pkg) },
+                    onToggle = { vm.toggle(e.pkg, g.id) },
                     menu = listOf(
                         "Abrir" to { vm.launch(e.pkg); Unit },
-                        (if (e.frozen) "Descongelar" else "Congelar") to { vm.toggle(e.pkg); Unit },
+                        (if (e.frozen) "Descongelar" else "Congelar") to { vm.toggle(e.pkg, g.id); Unit },
                         "Ficha de la app" to { openApp(e.pkg) },
                         (if (e.pkg in config.favorites) "Quitar de favoritas" else "Agregar a favoritas") to { vm.toggleFavorite(e.pkg) },
                         "Acceso directo para abrirla" to { app.qarentenapp.core.Shortcuts.pinApp(ctx, e.pkg); Unit },
@@ -185,8 +196,8 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
         }
     }
 
-    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }, groupApps = g.packages) { n, i, c ->
-        editing = false; vm.updateGroup(g.id, n, i, c)
+    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }, groupApps = g.packages, vm = vm, initialLock = g.lockMode) { n, i, c, l ->
+        editing = false; vm.updateGroup(g.id, n, i, c, l)
     }
     if (deleting) AlertDialog(
         onDismissRequest = { deleting = false },

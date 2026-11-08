@@ -62,6 +62,7 @@ fun QRoot(vm: MainViewModel) {
         LockScreen(onUnlock = vm::unlock); return
     }
 
+    AuthGate(vm.auth)
     val nav = rememberNavController()
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snack.showSnackbar(it) } }

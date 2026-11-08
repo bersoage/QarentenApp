@@ -59,6 +59,7 @@ fun SettingsScreen(vm: MainViewModel) {
     var warnSystem by rememberSaveable { mutableStateOf(false) }
     var warnServices by rememberSaveable { mutableStateOf(false) }
     var setPassword by rememberSaveable { mutableStateOf(false) }
+    var setGroupPw by rememberSaveable { mutableStateOf(false) }
     var report by rememberSaveable { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -223,6 +224,21 @@ fun SettingsScreen(vm: MainViewModel) {
             Text("Cambiar contraseña")
         }
 
+        // ---------- Protección de grupos ----------
+        Section("Protección de grupos")
+        Note("Elegí en cada grupo (✏️ Editar) si queda protegido. Se autentica una sola vez al entrar; adentro no vuelve a pedirse.")
+        Text("Cómo desbloquear", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+        Radio("Huella o contraseña", s.lockMethod == "BOTH") { vm.updateSettings { it.copy(lockMethod = "BOTH") } }
+        Radio("Solo huella", s.lockMethod == "BIOMETRIC") { vm.updateSettings { it.copy(lockMethod = "BIOMETRIC") } }
+        Radio("Solo contraseña", s.lockMethod == "PASSWORD") { vm.updateSettings { it.copy(lockMethod = "PASSWORD") } }
+        Text("Cuánto dura el desbloqueo", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+        listOf(0 to "Hasta que salgas del grupo", 1 to "1 minuto", 5 to "5 minutos", 15 to "15 minutos").forEach { (m, l) ->
+            Radio(l, s.unlockMinutes == m) { vm.updateSettings { it.copy(unlockMinutes = m) } }
+        }
+        TextButton(onClick = { setGroupPw = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+            Text(if (s.passwordHash == null) "Crear contraseña" else "Cambiar contraseña")
+        }
+
         // ---------- Actualizaciones ----------
         Section("Actualizaciones y arranque")
         ToggleRow("Vigilar actualizaciones", "Avisa si una app en cuarentena se activó sola por una actualización o un reseteo", s.monitorUpdates) { on ->
@@ -276,6 +292,7 @@ fun SettingsScreen(vm: MainViewModel) {
         },
         dismissButton = { TextButton(onClick = { warnServices = false }) { Text("Cancelar") } },
     )
+    if (setGroupPw) SetPasswordDialog(onDismiss = { setGroupPw = false }) { p -> setGroupPw = false; vm.setGroupPassword(p) }
     if (setPassword) SetPasswordDialog(onDismiss = { setPassword = false }) { p -> setPassword = false; vm.setPassword(p) }
     if (report) {
         val text = vm.errorReport()

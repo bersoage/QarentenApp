@@ -1,7 +1,6 @@
 package app.qarentenapp.ui
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -61,7 +60,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.qarentenapp.core.GroupLock
 import app.qarentenapp.core.Origin
+import app.qarentenapp.data.Group
 import app.qarentenapp.core.Repo
 import kotlinx.coroutines.launch
 
@@ -71,7 +72,7 @@ import kotlinx.coroutines.launch
  *  - Menú rápido: favoritas, activas y grupos, para congelar o activar sin abrir la app.
  *  - Grupo: las apps de un grupo, para abrirlas (widget con "lanzamiento directo").
  */
-class PopupActivity : ComponentActivity() {
+class PopupActivity : androidx.fragment.app.FragmentActivity() {
 
     companion object {
         const val EXTRA_MODE = "mode"
@@ -90,8 +91,17 @@ class PopupActivity : ComponentActivity() {
         lifecycleScope.launch { if (Repo.apps.value.isEmpty()) Repo.refresh() }
         setContent {
             QTheme {
-                var unlocked by remember { mutableStateOf(!(s.protectionEnabled && s.passwordHash != null)) }
-                if (!unlocked) PasswordDialog(onCancel = { finish() }, onOk = { unlocked = true })
+                // Grupo protegido: su huella o contraseña reemplaza a la contraseña general
+                val g = Repo.config.value.groups.firstOrNull { it.id == groupId }
+                val entryLocked = mode == MODE_GROUP && g != null && GroupLock.needsEntry(g)
+                var entered by remember { mutableStateOf(!entryLocked) }
+                LaunchedEffect(Unit) {
+                    if (entryLocked) auth.ask("Desbloquear «${g!!.name}»", onDenied = { finish() }) { GroupLock.enter(g.id); entered = true }
+                }
+                AuthGate(auth)
+                var unlocked by remember { mutableStateOf(!(s.protectionEnabled && s.passwordHash != null) || entryLocked) }
+                if (!entered) { /* esperando la huella */ }
+                else if (!unlocked) PasswordDialog(onCancel = { finish() }, onOk = { unlocked = true })
                 else PopupContent(mode, groupId, fullscreen = mode == MODE_DRAWER && s.drawerFullscreen, close = { finish() })
             }
         }
@@ -100,10 +110,27 @@ class PopupActivity : ComponentActivity() {
     /** Pedido de confirmación de apps del sistema dentro de las ventanas flotantes. */
     private val confirmState = mutableStateOf<SystemConfirm?>(null)
 
-    private fun guarded(pkgs: List<String>, frozen: Boolean, origin: Origin) {
+    private val auth = AuthState()
+
+    override fun onDestroy() {
+        if (intent.getStringExtra(EXTRA_MODE) == MODE_GROUP) intent.getStringExtra(EXTRA_ID)?.let { GroupLock.leave(it) }
+        super.onDestroy()
+    }
+
+    /**
+     * [group]: acción sobre el grupo entero (todas / un toque). [scoped]: acción sobre una app desde la ventana
+     * de su grupo (ya entraste). Sin ninguno, se pide autenticación si la app está en un grupo protegido bloqueado.
+     */
+    private fun guarded(pkgs: List<String>, frozen: Boolean, origin: Origin, group: Group? = null, scoped: Boolean = false) {
         val run = { lifecycleScope.launch { Repo.setFrozen(pkgs, frozen, origin) }; Unit }
-        val sys = Repo.systemToConfirm(pkgs, frozen)
-        if (sys.isEmpty()) run() else confirmState.value = SystemConfirm(pkgs, sys, run)
+        val go = {
+            val sys = Repo.systemToConfirm(pkgs, frozen)
+            if (sys.isEmpty()) run() else confirmState.value = SystemConfirm(pkgs, sys, run)
+        }
+        val need = when { group != null -> GroupLock.needsForGroup(group); scoped -> false; else -> GroupLock.needsForApps(pkgs) }
+        if (need) auth.ask(if (group != null) "Desbloquear «${group.name}»" else "Desbloquear apps protegidas") {
+            group?.let { GroupLock.grant(it.id) }; go()
+        } else go()
     }
 
     /**
@@ -154,7 +181,7 @@ class PopupActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Button(
-                            onClick = { guarded(g.packages, true, Origin.SHORTCUT) },
+                            onClick = { guarded(g.packages, true, Origin.SHORTCUT, group = g) },
                             enabled = !busy && rows.any { !it.frozen && !it.protected },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2F5E8E), contentColor = Color.White),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
@@ -165,7 +192,7 @@ class PopupActivity : ComponentActivity() {
                             Text("Congelar todas", fontSize = 14.sp, maxLines = 1)
                         }
                         Button(
-                            onClick = { guarded(g.packages, false, Origin.SHORTCUT) },
+                            onClick = { guarded(g.packages, false, Origin.SHORTCUT, group = g) },
                             enabled = !busy && rows.any { it.frozen },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E), contentColor = Color.White),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
@@ -212,7 +239,7 @@ class PopupActivity : ComponentActivity() {
                                     }
                                 }
                                 TextButton(
-                                    onClick = { guarded(listOf(e.pkg), !e.frozen, Origin.SHORTCUT) },
+                                    onClick = { guarded(listOf(e.pkg), !e.frozen, Origin.SHORTCUT, scoped = true) },
                                     enabled = !e.protected && !busy,
                                     modifier = Modifier.padding(end = 6.dp).size(60.dp),
                                 ) {
@@ -296,7 +323,7 @@ class PopupActivity : ComponentActivity() {
                                     val frozen = remember(apps, g) { Repo.groupFrozen(g) }
                                     FilterChip(
                                         selected = frozen,
-                                        onClick = { guarded(g.packages, !Repo.groupFrozen(g), Origin.WIDGET) },
+                                        onClick = { guarded(g.packages, !Repo.groupFrozen(g), Origin.WIDGET, group = g) },
                                         label = { Text(g.name) },
                                         leadingIcon = { if (frozen) Icon(Icons.Filled.AcUnit, null, Modifier.size(18.dp)) else GroupGlyph(g.icon, 18.dp, MaterialTheme.colorScheme.onSurfaceVariant) },
                                     )

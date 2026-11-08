@@ -3,7 +3,7 @@ package app.qarentenapp
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,7 +13,7 @@ import app.qarentenapp.ui.MainViewModel
 import app.qarentenapp.ui.QTheme
 import rikka.shizuku.Shizuku
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val vm: MainViewModel by viewModels()
 

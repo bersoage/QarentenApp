@@ -3,9 +3,10 @@ package app.qarentenapp.ui
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
+import app.qarentenapp.core.GroupLock
 import app.qarentenapp.core.Origin
 import app.qarentenapp.core.Repo
 import kotlinx.coroutines.launch
@@ -14,7 +15,7 @@ import kotlinx.coroutines.launch
  * Trampolín sin interfaz para accesos directos y widgets.
  * Si hay contraseña activada, la pide antes de actuar.
  */
-class ActionActivity : ComponentActivity() {
+class ActionActivity : FragmentActivity() {
 
     companion object {
         const val ACTION_TOGGLE_GROUP = "app.qarentenapp.TOGGLE_GROUP"
@@ -28,9 +29,40 @@ class ActionActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Repo.init(this)
         val s = Repo.config.value.settings
-        if (s.protectionEnabled && s.passwordHash != null) {
-            setContent { QTheme { PasswordDialog(onCancel = { finish() }, onOk = { perform(intent) }) } }
-        } else perform(intent)
+        // Si la acción toca un grupo protegido, la huella o contraseña del grupo reemplaza a la contraseña general
+        val groupAuth = groupAuthTitle(intent)
+        when {
+            groupAuth != null -> setContent { QTheme { AuthGate(auth) } }.also {
+                auth.ask(groupAuth, onDenied = { finish() }) { perform(intent) }
+            }
+            s.protectionEnabled && s.passwordHash != null ->
+                setContent { QTheme { PasswordDialog(onCancel = { finish() }, onOk = { perform(intent) }) } }
+            else -> perform(intent)
+        }
+    }
+
+    private val auth = AuthState()
+
+    /** Título del pedido si esta acción necesita desbloquear un grupo protegido; null si no. */
+    private fun groupAuthTitle(intent: Intent): String? {
+        val id = intent.getStringExtra(EXTRA_ID) ?: return null
+        val groups = Repo.config.value.groups
+        fun forGroup(gid: String) = groups.firstOrNull { it.id == gid }?.takeIf { GroupLock.needsForGroup(it) }?.let { "Desbloquear «${it.name}»" }
+        fun forApp(pkg: String) = if (GroupLock.needsForApps(listOf(pkg))) "Desbloquear ${Repo.labelOf(pkg)}" else null
+        return when (intent.action) {
+            ACTION_TOGGLE_GROUP -> forGroup(id)
+            ACTION_TOGGLE_APP -> forApp(id)
+            ACTION_WIDGET -> {
+                val conf = Repo.config.value.widgets[id] ?: return null
+                when {
+                    conf.kind == "group" && conf.quickToggle -> forGroup(conf.target)
+                    conf.kind == "group" -> null            // la ventana del grupo pide su propio ingreso
+                    conf.directLaunch -> null
+                    else -> forApp(conf.target)
+                }
+            }
+            else -> null
+        }
     }
 
     private fun perform(intent: Intent) {

@@ -100,7 +100,7 @@ object Notifier {
             runCatching { cell.setImageViewBitmap(R.id.c_icon, Bitmaps.app(p, frozen, 96)) }
             cell.setViewVisibility(R.id.c_status, if (frozen) View.VISIBLE else View.GONE)
             // Con "un toque": congela o activa al instante. Si no, abre la app.
-            val pi = if (singleClick) broadcast(context, ACTION_TOGGLE, p, 100 + i) else launch(context, p, 100 + i)
+            val pi = if (singleClick) toggle(context, p, 100 + i) else launch(context, p, 100 + i)
             cell.setOnClickPendingIntent(R.id.c_root, pi)
             rv.addView(if (i < 6) R.id.n_row1 else R.id.n_row2, cell)
         }
@@ -124,7 +124,7 @@ object Notifier {
             runCatching { row.setImageViewBitmap(R.id.r_icon, Bitmaps.app(p, frozen, 96)) }
             row.setTextViewText(R.id.r_label, Repo.labelOf(p))
             row.setTextViewText(R.id.r_action, if (frozen) "🔥 Descongelar" else "❄️ Congelar")
-            row.setOnClickPendingIntent(R.id.r_action, broadcast(context, ACTION_TOGGLE, p, 200 + i))
+            row.setOnClickPendingIntent(R.id.r_action, toggle(context, p, 200 + i))
             row.setOnClickPendingIntent(R.id.r_root, launch(context, p, 300 + i))
             rv.addView(R.id.n_list, row)
         }
@@ -167,6 +167,15 @@ object Notifier {
         return PendingIntent.getBroadcast(context, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
+    /** Congelar o activar desde la notificación; si la app está en un grupo protegido, pasa por la huella o contraseña. */
+    private fun toggle(context: Context, pkg: String, code: Int): PendingIntent {
+        if (!GroupLock.needsForApps(listOf(pkg))) return broadcast(context, ACTION_TOGGLE, pkg, code)
+        val i = Intent(context, ActionActivity::class.java).setAction(ActionActivity.ACTION_TOGGLE_APP)
+            .putExtra(ActionActivity.EXTRA_ID, pkg)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        return PendingIntent.getActivity(context, code + 5000, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     private fun launch(context: Context, pkg: String, code: Int): PendingIntent {
         val i = Intent(context, ActionActivity::class.java).setAction(ActionActivity.ACTION_LAUNCH)
             .putExtra(ActionActivity.EXTRA_ID, pkg)
@@ -183,8 +192,18 @@ class NotificationActionReceiver : BroadcastReceiver() {
             try {
                 if (Repo.apps.value.isEmpty()) Repo.refresh()
                 when (intent.action) {
-                    Notifier.ACTION_FREEZE_ALL -> Repo.setFrozen(Repo.config.value.active, true, Origin.NOTIFICATION)
-                    Notifier.ACTION_TOGGLE -> intent.getStringExtra(Notifier.EXTRA_PKG)?.let { Repo.toggle(it, Origin.NOTIFICATION) }
+                    Notifier.ACTION_FREEZE_ALL -> {
+                        // Las apps de grupos protegidos bloqueados no se tocan
+                        val all = Repo.config.value.active
+                        val skip = GroupLock.blockedApps(all)
+                        Repo.setFrozen(all - skip, true, Origin.NOTIFICATION)
+                        if (skip.isNotEmpty()) Repo.say("${skip.size} app(s) protegidas quedaron activas")
+                    }
+                    Notifier.ACTION_TOGGLE -> intent.getStringExtra(Notifier.EXTRA_PKG)?.let { p ->
+                        // La notificación pudo quedar vieja: si ahora está protegida, no se toca
+                        if (GroupLock.needsForApps(listOf(p))) Repo.say("${Repo.labelOf(p)} está protegida: abrila desde Q'App")
+                        else Repo.toggle(p, Origin.NOTIFICATION)
+                    }
                     Notifier.ACTION_REQUARANTINE -> {
                         Notifier.cancelUpdates(context)
                         intent.getStringArrayExtra(Notifier.EXTRA_PKGS)?.let { Repo.setFrozen(it.toList(), true, Origin.SYSTEM) }

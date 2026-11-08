@@ -2,6 +2,7 @@ package app.qarentenapp.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,7 +170,8 @@ fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) ->
     if (creating) GroupDialog(
         title = "Nuevo grupo", initialName = "", initialIcon = "folder", initialColor = config.groups.size % GroupColorPairs.size,
         onDismiss = { creating = false },
-        onSave = { name, icon, color -> creating = false; created(vm.createGroup(name, icon, color)) },
+        vm = vm,
+        onSave = { name, icon, color, lock -> creating = false; created(vm.createGroup(name, icon, color, lock)) },
     )
 }
 
@@ -268,8 +270,13 @@ fun GroupDialog(
     initialColor: Int,
     onDismiss: () -> Unit,
     groupApps: List<String> = emptyList(),
-    onSave: (String, String, Int) -> Unit,
+    vm: MainViewModel? = null,
+    initialLock: Int = 0,
+    onSave: (String, String, Int, Int) -> Unit,
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var lock by rememberSaveable { mutableStateOf(initialLock) }
+    var askPw by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf(initialName) }
     var icon by rememberSaveable { mutableStateOf(initialIcon) }
     var color by rememberSaveable { mutableStateOf(initialColor) }
@@ -308,11 +315,31 @@ fun GroupDialog(
                         }
                     }
                 }
+                if (vm != null) {
+                    Text("Protección", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    listOf(
+                        0 to "Sin protección",
+                        1 to "Todo el grupo (huella o contraseña al entrar)",
+                        2 to "Solo «Congelar/Descongelar todas» y los toques de un paso",
+                    ).forEach { (v, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { lock = v }) {
+                            androidx.compose.material3.RadioButton(selected = lock == v, onClick = { lock = v })
+                            Text(label, fontSize = 14.sp)
+                        }
+                    }
+                }
             }
         },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(name, icon, color) }) { Text("Guardar") } },
+        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = {
+            val s = app.qarentenapp.core.Repo.config.value.settings
+            val noWay = s.passwordHash == null && (s.lockMethod == "PASSWORD" || !Biometrics.available(ctx))
+            if (lock != 0 && noWay) askPw = true else onSave(name, icon, color, lock)
+        }) { Text("Guardar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
+    if (askPw && vm != null) SetPasswordDialog(onDismiss = { askPw = false }) { p ->
+        askPw = false; vm.setGroupPassword(p); onSave(name, icon, color, lock)
+    }
     if (picking) IconPickerDialog(current = icon, groupApps = groupApps, onDismiss = { picking = false }) {
         icon = it; iconTouched = true; picking = false
     }
