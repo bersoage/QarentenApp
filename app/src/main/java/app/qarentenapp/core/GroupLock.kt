@@ -47,6 +47,11 @@ object GroupLock {
     /** Acciones sobre el grupo entero (todas / un toque) piden autenticación en cualquier modo protegido. */
     fun needsForGroup(g: Group): Boolean = g.lockMode != 0 && !unlocked(g.id)
 
+    /** Método propio del grupo; null = el general. */
+    fun methodOf(g: Group): String? = g.lockMethod.ifEmpty { null }
+    fun methodForApps(pkgs: Collection<String>): String? =
+        pkgs.firstNotNullOfOrNull { blockingForApp(it).firstOrNull() }?.let { methodOf(it) }
+
     fun needsEntry(g: Group): Boolean = g.lockMode == 1 && !unlocked(g.id)
 
     /** Apps que un «congelar todo» general no debe tocar (están en grupos protegidos bloqueados). */

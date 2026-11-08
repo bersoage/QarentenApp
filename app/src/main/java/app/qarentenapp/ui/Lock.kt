@@ -139,3 +139,23 @@ fun SetPasswordDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }
+
+/** Pantalla de bloqueo al abrir la app con huella o con el bloqueo del celular. */
+@Composable
+fun DeviceLockScreen(onUnlocked: () -> Unit) {
+    val state = remember { AuthState() }
+    fun ask() = state.ask("Desbloquear Q'App", onOk = onUnlocked)
+    androidx.compose.runtime.LaunchedEffect(Unit) { ask() }
+    AuthGate(state)
+    Column(
+        Modifier.fillMaxSize().background(Navy).padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Image(painterResource(R.drawable.logo_candado), null, Modifier.height(140.dp))
+        Spacer(Modifier.height(24.dp))
+        Text("Q'App está bloqueada", color = Color.White, fontSize = 16.sp)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = { ask() }) { Text("Desbloquear") }
+    }
+}

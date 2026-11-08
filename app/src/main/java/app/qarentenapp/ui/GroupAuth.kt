@@ -18,20 +18,27 @@ import app.qarentenapp.core.Repo
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Un pedido de autenticación: [onOk] corre si se desbloquea, [onDenied] si se cancela. */
-class AuthRequest(val title: String, val onDenied: (() -> Unit)? = null, val onOk: () -> Unit)
+class AuthRequest(val title: String, val method: String? = null, val onDenied: (() -> Unit)? = null, val onOk: () -> Unit)
 
 /** Contenedor del pedido pendiente; lo dibuja [AuthGate]. */
 class AuthState {
     val req = MutableStateFlow<AuthRequest?>(null)
-    fun ask(title: String, onDenied: (() -> Unit)? = null, onOk: () -> Unit) { req.value = AuthRequest(title, onDenied, onOk) }
+    /** [method]: DEVICE, BIOMETRIC o PASSWORD; null = el método general de Ajustes. */
+    fun ask(title: String, method: String? = null, onDenied: (() -> Unit)? = null, onOk: () -> Unit) { req.value = AuthRequest(title, method, onDenied, onOk) }
     fun close() { req.value = null }
 }
 
 object Biometrics {
-    private const val AUTH = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
+    private const val BIO = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
+    // Huella o el bloqueo del propio celular (patrón, PIN o contraseña). WEAK porque STRONG + credencial no se puede combinar antes de Android 11.
+    private const val DEVICE = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
 
     fun available(ctx: Context): Boolean =
-        BiometricManager.from(ctx).canAuthenticate(AUTH) == BiometricManager.BIOMETRIC_SUCCESS
+        BiometricManager.from(ctx).canAuthenticate(BIO) == BiometricManager.BIOMETRIC_SUCCESS
+
+    /** El celular tiene huella o algún bloqueo de pantalla puesto. */
+    fun deviceAvailable(ctx: Context): Boolean =
+        BiometricManager.from(ctx).canAuthenticate(DEVICE) == BiometricManager.BIOMETRIC_SUCCESS
 
     fun activity(ctx: Context): FragmentActivity? {
         var c = ctx
@@ -39,45 +46,44 @@ object Biometrics {
         return null
     }
 
-    fun prompt(a: FragmentActivity, title: String, canUsePassword: Boolean, onOk: () -> Unit, onPassword: () -> Unit, onCancel: () -> Unit) {
+    /** Método efectivo: el de la tarea o el general; el viejo "BOTH" equivale a DEVICE. */
+    fun effective(method: String?): String {
+        val m = if (method.isNullOrEmpty()) Repo.config.value.settings.lockMethod else method
+        return if (m == "BIOMETRIC" || m == "PASSWORD") m else "DEVICE"
+    }
+
+    fun prompt(a: FragmentActivity, title: String, device: Boolean, onOk: () -> Unit, onCancel: () -> Unit) {
         val cb = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onOk()
-            override fun onAuthenticationError(code: Int, msg: CharSequence) {
-                if (code == BiometricPrompt.ERROR_NEGATIVE_BUTTON && canUsePassword) onPassword() else onCancel()
-            }
+            override fun onAuthenticationError(code: Int, msg: CharSequence) = onCancel()
         }
-        val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle("Q'App")
-            .setAllowedAuthenticators(AUTH)
-            .setNegativeButtonText(if (canUsePassword) "Usar contraseña" else "Cancelar")
-            .build()
-        BiometricPrompt(a, ContextCompat.getMainExecutor(a), cb).authenticate(info)
+        val b = BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle("Q'App")
+        if (device) b.setAllowedAuthenticators(DEVICE) else b.setAllowedAuthenticators(BIO).setNegativeButtonText("Cancelar")
+        BiometricPrompt(a, ContextCompat.getMainExecutor(a), cb).authenticate(b.build())
     }
 }
 
 /**
- * Pide huella o contraseña según el método elegido en Ajustes y, si sale bien, ejecuta el pedido.
- * Si no hay ni huella ni contraseña configuradas no hay con qué proteger: deja pasar.
+ * Pide huella, bloqueo del celular (patrón/PIN) o contraseña de Q'App según el método y, si sale bien, ejecuta el pedido.
+ * Si el celular no tiene nada configurado se cae a la contraseña de Q'App; sin contraseña tampoco hay con qué proteger y deja pasar.
  */
 @Composable
 fun AuthGate(state: AuthState) {
     val req by state.req.collectAsState()
     val r = req ?: return
     val ctx = LocalContext.current
-    val s = Repo.config.value.settings
-    val hasPw = s.passwordHash != null
+    val hasPw = Repo.config.value.settings.passwordHash != null
     var showPw by remember(r) { mutableStateOf(false) }
     fun ok() { state.close(); r.onOk() }
     fun denied() { state.close(); r.onDenied?.invoke() }
     LaunchedEffect(r) {
         val act = Biometrics.activity(ctx)
-        val bio = s.lockMethod != "PASSWORD" && act != null && Biometrics.available(ctx)
+        val m = Biometrics.effective(r.method)
+        val device = m == "DEVICE" && Biometrics.deviceAvailable(ctx)
+        val bio = m == "BIOMETRIC" && Biometrics.available(ctx)
         when {
-            bio -> Biometrics.prompt(act!!, r.title, canUsePassword = hasPw && s.lockMethod == "BOTH",
-                onOk = { ok() }, onPassword = { showPw = true }, onCancel = { denied() })
-            hasPw && s.lockMethod != "BIOMETRIC" -> showPw = true
-            hasPw -> showPw = true   // solo huella pero el celular ya no tiene: se cae a la contraseña
+            act != null && (device || bio) -> Biometrics.prompt(act, r.title, device, onOk = { ok() }, onCancel = { denied() })
+            hasPw -> showPw = true
             else -> ok()
         }
     }

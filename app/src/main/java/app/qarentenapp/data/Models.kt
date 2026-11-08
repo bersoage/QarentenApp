@@ -13,6 +13,8 @@ data class Group(
     val packages: List<String> = emptyList(),
     /** Protección: 0 = ninguna, 1 = todo el grupo (se pide al entrar), 2 = solo «Congelar/Descongelar todas» y los toques de un solo paso. */
     val lockMode: Int = 0,
+    /** Cómo se desbloquea este grupo: "" = el método general, o DEVICE / BIOMETRIC / PASSWORD. */
+    val lockMethod: String = "",
 )
 
 @Serializable
@@ -64,8 +66,8 @@ data class AppSettings(
     val protectionEnabled: Boolean = false,
     val passwordHash: String? = null,
     val passwordSalt: String? = null,
-    /** Cómo se desbloquean los grupos protegidos: BOTH (huella o contraseña), BIOMETRIC o PASSWORD. */
-    val lockMethod: String = "BOTH",
+    /** Cómo se desbloquean los grupos protegidos: DEVICE (huella o bloqueo del celular), BIOMETRIC o PASSWORD. */
+    val lockMethod: String = "DEVICE",
     /** Minutos que dura el desbloqueo de un grupo; 0 = hasta que salís del grupo. */
     val unlockMinutes: Int = 0,
     // Actualizaciones

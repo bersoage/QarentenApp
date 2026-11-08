@@ -62,6 +62,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.qarentenapp.core.GroupLock
 import app.qarentenapp.core.Origin
+import app.qarentenapp.core.Security
 import app.qarentenapp.data.Group
 import app.qarentenapp.core.Repo
 import kotlinx.coroutines.launch
@@ -96,12 +97,13 @@ class PopupActivity : androidx.fragment.app.FragmentActivity() {
                 val entryLocked = mode == MODE_GROUP && g != null && GroupLock.needsEntry(g)
                 var entered by remember { mutableStateOf(!entryLocked) }
                 LaunchedEffect(Unit) {
-                    if (entryLocked) auth.ask("Desbloquear «${g!!.name}»", onDenied = { finish() }) { GroupLock.enter(g.id); entered = true }
+                    if (entryLocked) auth.ask("Desbloquear «${g!!.name}»", GroupLock.methodOf(g), onDenied = { finish() }) { GroupLock.enter(g.id); entered = true }
                 }
                 AuthGate(auth)
-                var unlocked by remember { mutableStateOf(!(s.protectionEnabled && s.passwordHash != null) || entryLocked) }
-                if (!entered) { /* esperando la huella */ }
-                else if (!unlocked) PasswordDialog(onCancel = { finish() }, onOk = { unlocked = true })
+                val appLocked = Security.appLocked(s) && !entryLocked
+                var unlocked by remember { mutableStateOf(!appLocked) }
+                LaunchedEffect(Unit) { if (appLocked) auth.ask("Desbloquear Q'App", onDenied = { finish() }) { unlocked = true } }
+                if (!entered || !unlocked) { /* esperando la autenticación */ }
                 else PopupContent(mode, groupId, fullscreen = mode == MODE_DRAWER && s.drawerFullscreen, close = { finish() })
             }
         }
@@ -128,7 +130,8 @@ class PopupActivity : androidx.fragment.app.FragmentActivity() {
             if (sys.isEmpty()) run() else confirmState.value = SystemConfirm(pkgs, sys, run)
         }
         val need = when { group != null -> GroupLock.needsForGroup(group); scoped -> false; else -> GroupLock.needsForApps(pkgs) }
-        if (need) auth.ask(if (group != null) "Desbloquear «${group.name}»" else "Desbloquear apps protegidas") {
+        val method = if (group != null) GroupLock.methodOf(group) else GroupLock.methodForApps(pkgs)
+        if (need) auth.ask(if (group != null) "Desbloquear «${group.name}»" else "Desbloquear apps protegidas", method) {
             group?.let { GroupLock.grant(it.id) }; go()
         } else go()
     }

@@ -171,7 +171,7 @@ fun GroupsScreen(vm: MainViewModel, open: (String) -> Unit, created: (String) ->
         title = "Nuevo grupo", initialName = "", initialIcon = "folder", initialColor = config.groups.size % GroupColorPairs.size,
         onDismiss = { creating = false },
         vm = vm,
-        onSave = { name, icon, color, lock -> creating = false; created(vm.createGroup(name, icon, color, lock)) },
+        onSave = { name, icon, color, lock, method -> creating = false; created(vm.createGroup(name, icon, color, lock, method)) },
     )
 }
 
@@ -272,10 +272,12 @@ fun GroupDialog(
     groupApps: List<String> = emptyList(),
     vm: MainViewModel? = null,
     initialLock: Int = 0,
-    onSave: (String, String, Int, Int) -> Unit,
+    initialMethod: String = "",
+    onSave: (String, String, Int, Int, String) -> Unit,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var lock by rememberSaveable { mutableStateOf(initialLock) }
+    var method by rememberSaveable { mutableStateOf(initialMethod) }
     var askPw by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf(initialName) }
     var icon by rememberSaveable { mutableStateOf(initialIcon) }
@@ -327,18 +329,36 @@ fun GroupDialog(
                             Text(label, fontSize = 14.sp)
                         }
                     }
+                    if (lock != 0) {
+                        Text("Cómo se desbloquea", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        listOf(
+                            "" to "El método general (Ajustes)",
+                            "DEVICE" to "Huella o bloqueo del celular (patrón, PIN)",
+                            "BIOMETRIC" to "Solo huella",
+                            "PASSWORD" to "Contraseña de Q'App",
+                        ).forEach { (v, label) ->
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { method = v }) {
+                                androidx.compose.material3.RadioButton(selected = method == v, onClick = { method = v })
+                                Text(label, fontSize = 14.sp)
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = {
             val s = app.qarentenapp.core.Repo.config.value.settings
-            val noWay = s.passwordHash == null && (s.lockMethod == "PASSWORD" || !Biometrics.available(ctx))
-            if (lock != 0 && noWay) askPw = true else onSave(name, icon, color, lock)
+            val noWay = s.passwordHash == null && when (Biometrics.effective(method.ifEmpty { null })) {
+                "PASSWORD" -> true
+                "BIOMETRIC" -> !Biometrics.available(ctx)
+                else -> !Biometrics.deviceAvailable(ctx)
+            }
+            if (lock != 0 && noWay) askPw = true else onSave(name, icon, color, lock, if (lock == 0) "" else method)
         }) { Text("Guardar") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
     if (askPw && vm != null) SetPasswordDialog(onDismiss = { askPw = false }) { p ->
-        askPw = false; vm.setGroupPassword(p); onSave(name, icon, color, lock)
+        askPw = false; vm.setGroupPassword(p); onSave(name, icon, color, lock, if (lock == 0) "" else method)
     }
     if (picking) IconPickerDialog(current = icon, groupApps = groupApps, onDismiss = { picking = false }) {
         icon = it; iconTouched = true; picking = false

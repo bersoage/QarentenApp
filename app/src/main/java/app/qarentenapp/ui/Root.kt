@@ -58,8 +58,10 @@ fun QRoot(vm: MainViewModel) {
     val locked by vm.locked.collectAsState()
     val config by vm.config.collectAsState()
     if (!loaded) { Splash(); return }
-    if (locked && config.settings.protectionEnabled && config.settings.passwordHash != null) {
-        LockScreen(onUnlock = vm::unlock); return
+    if (locked && app.qarentenapp.core.Security.appLocked(config.settings)) {
+        if (Biometrics.effective(null) == "PASSWORD") LockScreen(onUnlock = vm::unlock)
+        else DeviceLockScreen(onUnlocked = vm::unlockApp)
+        return
     }
 
     AuthGate(vm.auth)

@@ -18,6 +18,10 @@ object Security {
         return d.joinToString("") { "%02x".format(it) }
     }
 
+    /** ¿La app se bloquea al abrirla? Con método «contraseña» hace falta tenerla creada. */
+    fun appLocked(s: app.qarentenapp.data.AppSettings) =
+        s.protectionEnabled && (s.lockMethod != "PASSWORD" || s.passwordHash != null)
+
     fun check(password: String, salt: String?, hash: String?): Boolean =
         salt != null && hash != null && hash(password, salt) == hash
 }

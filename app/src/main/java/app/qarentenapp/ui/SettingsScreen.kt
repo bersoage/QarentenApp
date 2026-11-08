@@ -217,26 +217,25 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ---------- Seguridad ----------
         Section("Seguridad")
-        ToggleRow("Protección con contraseña", "Pide la contraseña para abrir Q'App y para usar widgets y accesos directos", s.protectionEnabled) { on ->
-            if (on) setPassword = true else vm.disableProtection()
-        }
-        if (s.protectionEnabled) TextButton(onClick = { setPassword = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
-            Text("Cambiar contraseña")
+        ToggleRow("Bloquear Q'App al abrirla", "Pide el método de «Protección de grupos» para abrir Q'App y para usar widgets y accesos directos", s.protectionEnabled) { on ->
+            if (on && Biometrics.effective(null) == "PASSWORD" && s.passwordHash == null) setPassword = true
+            else vm.setProtection(on)
         }
 
         // ---------- Protección de grupos ----------
         Section("Protección de grupos")
         Note("Elegí en cada grupo (✏️ Editar) si queda protegido. Se autentica una sola vez al entrar; adentro no vuelve a pedirse.")
         Text("Cómo desbloquear", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-        Radio("Huella o contraseña", s.lockMethod == "BOTH") { vm.updateSettings { it.copy(lockMethod = "BOTH") } }
-        Radio("Solo huella", s.lockMethod == "BIOMETRIC") { vm.updateSettings { it.copy(lockMethod = "BIOMETRIC") } }
-        Radio("Solo contraseña", s.lockMethod == "PASSWORD") { vm.updateSettings { it.copy(lockMethod = "PASSWORD") } }
+        val m = Biometrics.effective(null)
+        Radio("Huella o bloqueo del celular (patrón, PIN)", m == "DEVICE") { vm.updateSettings { it.copy(lockMethod = "DEVICE") } }
+        Radio("Solo huella", m == "BIOMETRIC") { vm.updateSettings { it.copy(lockMethod = "BIOMETRIC") } }
+        Radio("Contraseña de Q'App", m == "PASSWORD") { vm.updateSettings { it.copy(lockMethod = "PASSWORD") } }
         Text("Cuánto dura el desbloqueo", modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
         listOf(0 to "Hasta que salgas del grupo", 1 to "1 minuto", 5 to "5 minutos", 15 to "15 minutos").forEach { (m, l) ->
             Radio(l, s.unlockMinutes == m) { vm.updateSettings { it.copy(unlockMinutes = m) } }
         }
         TextButton(onClick = { setGroupPw = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
-            Text(if (s.passwordHash == null) "Crear contraseña" else "Cambiar contraseña")
+            Text(if (s.passwordHash == null) "Crear contraseña de Q'App" else "Cambiar contraseña de Q'App")
         }
 
         // ---------- Actualizaciones ----------

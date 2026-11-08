@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import app.qarentenapp.core.GroupLock
 import app.qarentenapp.core.Origin
 import app.qarentenapp.core.Repo
+import app.qarentenapp.core.Security
 import kotlinx.coroutines.launch
 
 /**
@@ -33,10 +34,11 @@ class ActionActivity : FragmentActivity() {
         val groupAuth = groupAuthTitle(intent)
         when {
             groupAuth != null -> setContent { QTheme { AuthGate(auth) } }.also {
-                auth.ask(groupAuth, onDenied = { finish() }) { perform(intent) }
+                auth.ask(groupAuth.first, groupAuth.second, onDenied = { finish() }) { perform(intent) }
             }
-            s.protectionEnabled && s.passwordHash != null ->
-                setContent { QTheme { PasswordDialog(onCancel = { finish() }, onOk = { perform(intent) }) } }
+            Security.appLocked(s) -> setContent { QTheme { AuthGate(auth) } }.also {
+                auth.ask("Desbloquear Q'App", onDenied = { finish() }) { perform(intent) }
+            }
             else -> perform(intent)
         }
     }
@@ -44,11 +46,12 @@ class ActionActivity : FragmentActivity() {
     private val auth = AuthState()
 
     /** Título del pedido si esta acción necesita desbloquear un grupo protegido; null si no. */
-    private fun groupAuthTitle(intent: Intent): String? {
+    private fun groupAuthTitle(intent: Intent): Pair<String, String?>? {
         val id = intent.getStringExtra(EXTRA_ID) ?: return null
         val groups = Repo.config.value.groups
-        fun forGroup(gid: String) = groups.firstOrNull { it.id == gid }?.takeIf { GroupLock.needsForGroup(it) }?.let { "Desbloquear «${it.name}»" }
-        fun forApp(pkg: String) = if (GroupLock.needsForApps(listOf(pkg))) "Desbloquear ${Repo.labelOf(pkg)}" else null
+        fun forGroup(gid: String) = groups.firstOrNull { it.id == gid }?.takeIf { GroupLock.needsForGroup(it) }
+            ?.let { "Desbloquear «${it.name}»" to GroupLock.methodOf(it) }
+        fun forApp(pkg: String) = if (GroupLock.needsForApps(listOf(pkg))) "Desbloquear ${Repo.labelOf(pkg)}" to GroupLock.methodForApps(listOf(pkg)) else null
         return when (intent.action) {
             ACTION_TOGGLE_GROUP -> forGroup(id)
             ACTION_TOGGLE_APP -> forApp(id)

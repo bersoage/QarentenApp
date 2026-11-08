@@ -41,7 +41,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val loaded = _loaded.asStateFlow()
 
     /** Bloqueado por contraseña. */
-    private val _locked = MutableStateFlow(Repo.config.value.settings.protectionEnabled)
+    private val _locked = MutableStateFlow(Security.appLocked(Repo.config.value.settings))
     val locked = _locked.asStateFlow()
 
     /** Backup recién importado, esperando confirmación. */
@@ -76,7 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onStop() {
-        if (Repo.config.value.settings.protectionEnabled) _locked.value = true
+        if (Security.appLocked(Repo.config.value.settings)) _locked.value = true
     }
 
     private fun checkRequarantine() {
@@ -130,14 +130,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggle(pkg: String, fromGroup: String? = null) {
         val e = Repo.appMap()[pkg] ?: return
         val go = { guarded(listOf(pkg), !e.frozen) }
-        if (fromGroup == null && GroupLock.needsForApps(listOf(pkg))) auth.ask("Desbloquear ${Repo.labelOf(pkg)}") { go() } else go()
+        if (fromGroup == null && GroupLock.needsForApps(listOf(pkg))) auth.ask("Desbloquear ${Repo.labelOf(pkg)}", GroupLock.methodForApps(listOf(pkg))) { go() } else go()
     }
     fun setFrozen(pkgs: List<String>, frozen: Boolean) {
-        if (GroupLock.needsForApps(pkgs)) auth.ask("Desbloquear apps protegidas") { guarded(pkgs, frozen) } else guarded(pkgs, frozen)
+        if (GroupLock.needsForApps(pkgs)) auth.ask("Desbloquear apps protegidas", GroupLock.methodForApps(pkgs)) { guarded(pkgs, frozen) } else guarded(pkgs, frozen)
     }
     fun setGroupFrozen(g: Group, frozen: Boolean) {
         val cur = Repo.config.value.groups.firstOrNull { it.id == g.id } ?: g
-        if (GroupLock.needsForGroup(cur)) auth.ask("Desbloquear «${cur.name}»") { GroupLock.grant(cur.id); guarded(cur.packages, frozen) }
+        if (GroupLock.needsForGroup(cur)) auth.ask("Desbloquear «${cur.name}»", GroupLock.methodOf(cur)) { GroupLock.grant(cur.id); guarded(cur.packages, frozen) }
         else guarded(cur.packages, frozen)
     }
     fun launch(pkg: String) = viewModelScope.launch { Repo.launch(pkg) }
@@ -162,14 +162,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- Grupos ----------------
 
-    fun createGroup(name: String, icon: String, color: Int, lockMode: Int = 0): String {
-        val g = Group(id = UUID.randomUUID().toString(), name = name.trim(), icon = icon, color = color, lockMode = lockMode)
+    fun createGroup(name: String, icon: String, color: Int, lockMode: Int = 0, lockMethod: String = ""): String {
+        val g = Group(id = UUID.randomUUID().toString(), name = name.trim(), icon = icon, color = color, lockMode = lockMode, lockMethod = lockMethod)
         Repo.update { it.copy(groups = it.groups + g) }
         return g.id
     }
 
-    fun updateGroup(id: String, name: String, icon: String, color: Int, lockMode: Int = 0) =
-        editGroup(id) { it.copy(name = name.trim(), icon = icon, color = color, lockMode = lockMode) }
+    fun updateGroup(id: String, name: String, icon: String, color: Int, lockMode: Int = 0, lockMethod: String = "") =
+        editGroup(id) { it.copy(name = name.trim(), icon = icon, color = color, lockMode = lockMode, lockMethod = lockMethod) }
 
     fun setGroupApps(id: String, pkgs: List<String>) = editGroup(id) { it.copy(packages = pkgs.distinct()) }
     fun addToGroup(id: String, pkg: String) = editGroup(id) { it.copy(packages = (it.packages + pkg).distinct()) }
@@ -245,6 +245,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         updateSettings { it.copy(passwordSalt = salt, passwordHash = Security.hash(password, salt)) }
         Repo.say("Contraseña guardada")
     }
+
+    /** Bloquear la app al abrirla (con el método general). */
+    fun setProtection(on: Boolean) = updateSettings { it.copy(protectionEnabled = on) }
+
+    /** La app se desbloqueó con huella o bloqueo del celular. */
+    fun unlockApp() { _locked.value = false }
 
     fun hasPassword() = Repo.config.value.settings.passwordHash != null
 

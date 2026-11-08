@@ -71,7 +71,7 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
     var allowed by androidx.compose.runtime.remember(id) { mutableStateOf(!app.qarentenapp.core.GroupLock.needsEntry(g)) }
     if (!allowed) {
         androidx.compose.runtime.LaunchedEffect(id) {
-            vm.auth.ask("Desbloquear «${g.name}»", onDenied = back) { app.qarentenapp.core.GroupLock.enter(id); allowed = true }
+            vm.auth.ask("Desbloquear «${g.name}»", app.qarentenapp.core.GroupLock.methodOf(g), onDenied = back) { app.qarentenapp.core.GroupLock.enter(id); allowed = true }
         }
         androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth())
         return
@@ -196,8 +196,8 @@ fun GroupScreen(vm: MainViewModel, id: String, back: () -> Unit, pick: () -> Uni
         }
     }
 
-    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }, groupApps = g.packages, vm = vm, initialLock = g.lockMode) { n, i, c, l ->
-        editing = false; vm.updateGroup(g.id, n, i, c, l)
+    if (editing) GroupDialog("Editar grupo", g.name, g.icon, g.color, onDismiss = { editing = false }, groupApps = g.packages, vm = vm, initialLock = g.lockMode, initialMethod = g.lockMethod) { n, i, c, l, m ->
+        editing = false; vm.updateGroup(g.id, n, i, c, l, m)
     }
     if (deleting) AlertDialog(
         onDismissRequest = { deleting = false },
