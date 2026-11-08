@@ -82,19 +82,39 @@ class WidgetConfigActivity : ComponentActivity() {
         val vm: MainViewModel = viewModel()
         val config by Repo.config.collectAsState()
         val apps by Repo.apps.collectAsState()
-        var kind by remember { mutableStateOf(existing?.kind ?: "group") }
+        // Tipo fijo según el widget elegido: App, Grupo o Ventana de grupo
+        val fixed = remember { Widgets.fixedKind(this@WidgetConfigActivity, widgetId) }
+        var kind by remember { mutableStateOf(when (fixed) { "app" -> "app"; "group", "groupwin" -> "group"; else -> existing?.kind ?: "group" }) }
         var target by remember { mutableStateOf(existing?.target) }
         var direct by remember { mutableStateOf(existing?.directLaunch ?: false) }
         var black by remember { mutableStateOf(existing?.blackBackground ?: false) }
         var hideCaption by remember { mutableStateOf(existing?.hideCaption ?: false) }
         var hideStatus by remember { mutableStateOf(existing?.hideStatus ?: false) }
-        var quick by remember { mutableStateOf(existing?.quickToggle ?: false) }
+        var quick by remember { mutableStateOf(when (fixed) { "group" -> true; "groupwin" -> false; else -> existing?.quickToggle ?: false }) }
         var query by remember { mutableStateOf("") }
 
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.systemBarsPadding()) {
-                Text("Widget de Q'App", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
-                SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+                Text(
+                    when (fixed) {
+                        "app" -> "Widget de app"
+                        "group" -> "Widget de grupo"
+                        "groupwin" -> "Widget de ventana de grupo"
+                        else -> "Widget de Q'App"
+                    },
+                    fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp),
+                )
+                Text(
+                    when (fixed) {
+                        "app" -> "Elegí la app. Un toque la congela o la descongela."
+                        "group" -> "Elegí el grupo. Un toque congela o descongela todas sus apps."
+                        "groupwin" -> "Elegí el grupo. Un toque abre su ventana con la lista de apps."
+                        else -> "Elegí un grupo o una app."
+                    },
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 12.dp),
+                )
+                if (fixed == null) SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
                     SegmentedButton(selected = kind == "group", onClick = { kind = "group"; target = null },
                         shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Grupo") }
                     SegmentedButton(selected = kind == "app", onClick = { kind = "app"; target = null },
@@ -139,9 +159,9 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 HorizontalDivider()
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (kind == "group") Toggle("Congelar o activar de un toque",
+                    if (kind == "group" && fixed == null) Toggle("Congelar o activar de un toque",
                         "Si está apagado, el widget abre la ventana del grupo con sus apps", quick) { quick = it }
-                    else Toggle("Lanzamiento directo", "Abre la app de un toque (se descongela sola) en vez de congelarla", direct) { direct = it }
+                    if (kind == "app") Toggle("Lanzamiento directo", "Abre la app de un toque (se descongela sola) en vez de congelarla", direct) { direct = it }
                     Toggle("Fondo negro", "Muestra el widget con fondo negro", black) { black = it }
                     Toggle("Ocultar nombre", "Oculta el nombre del grupo o la app", hideCaption) { hideCaption = it }
                     Toggle("Ocultar estado", "Oculta el indicador de congelado", hideStatus) { hideStatus = it }

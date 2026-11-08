@@ -65,6 +65,8 @@ data class AppSettings(
     // Actualizaciones
     val monitorUpdates: Boolean = true,
     val autoRequarantine: Boolean = false,
+    /** Al prender el celular, volver a congelar las apps que se descongelaron desde Q'App. */
+    val refreezeOnBoot: Boolean = false,
     // Avanzado
     val forceRestartLauncher: Boolean = false,
     // Backup
@@ -84,6 +86,8 @@ data class Config(
     val quarantined: Set<String> = emptySet(),
     /** Apps descongeladas desde Q'App (para la notificación de "activas"). */
     val active: Set<String> = emptySet(),
+    /** Hay que volver a congelar las activas (se reinició el celular y todavía no se pudo). */
+    val refreezePending: Boolean = false,
     /** Últimas apps cambiadas desde la notificación o un widget (para relanzarlas). */
     val recent: List<String> = emptyList(),
     /** Apps del sistema que el usuario pidió no volver a advertir al congelarlas. */

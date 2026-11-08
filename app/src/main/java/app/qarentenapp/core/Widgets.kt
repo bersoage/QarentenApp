@@ -11,8 +11,8 @@ import android.widget.RemoteViews
 import app.qarentenapp.R
 import app.qarentenapp.ui.ActionActivity
 
-/** Widget chico (1×1): un grupo o una app, con su estado. */
-class QWidgetProvider : AppWidgetProvider() {
+/** Widget chico (1×1): un grupo o una app, con su estado. Base de los tres tipos de widget. */
+open class QWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         Repo.init(context)
         ids.forEach { Widgets.update(context, manager, it) }
@@ -24,12 +24,35 @@ class QWidgetProvider : AppWidgetProvider() {
     }
 }
 
+/** «Q'App · App»: congela o descongela una app (o la abre, con lanzamiento directo). */
+class AppWidget : QWidgetProvider()
+/** «Q'App · Grupo»: congela o descongela el grupo entero de un toque. */
+class GroupWidget : QWidgetProvider()
+/** «Q'App · Ventana de grupo»: abre la ventana flotante del grupo, como el acceso directo. */
+class GroupWindowWidget : QWidgetProvider()
+
 object Widgets {
+
+    private val providers = listOf(
+        QWidgetProvider::class.java, AppWidget::class.java, GroupWidget::class.java, GroupWindowWidget::class.java,
+    )
+
+    /** Tipo fijo según el widget elegido en la lista del celular: "app", "group", "groupwin" o null (widget de la beta vieja). */
+    fun fixedKind(context: Context, id: Int): String? {
+        val cls = AppWidgetManager.getInstance(context).getAppWidgetInfo(id)?.provider?.className ?: return null
+        return when (cls) {
+            AppWidget::class.java.name -> "app"
+            GroupWidget::class.java.name -> "group"
+            GroupWindowWidget::class.java.name -> "groupwin"
+            else -> null
+        }
+    }
 
     fun updateAll(context: Context) {
         val m = AppWidgetManager.getInstance(context)
-        val ids = m.getAppWidgetIds(ComponentName(context, QWidgetProvider::class.java))
-        ids.forEach { update(context, m, it) }
+        providers.forEach { cls ->
+            m.getAppWidgetIds(ComponentName(context, cls)).forEach { update(context, m, it) }
+        }
     }
 
     fun update(context: Context, manager: AppWidgetManager, id: Int) {

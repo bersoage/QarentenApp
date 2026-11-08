@@ -176,6 +176,8 @@ fun Splash() {
             Spacer(Modifier.width(10.dp))
             Text("Buscando root o Shizuku…", color = Color(0xFFBFD3F2), fontSize = 13.sp)
         }
+        Spacer(Modifier.height(48.dp))
+        Text("por Bernardo Soage", color = Color(0xFF7F95C2), fontSize = 12.sp)
     }
 }
 

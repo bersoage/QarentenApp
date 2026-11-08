@@ -29,6 +29,19 @@ object UpdateWatcher {
         }
     }
 
+    /** Volver a congelar después de reiniciar; si todavía no hay root ni Shizuku, reintenta. */
+    fun refreezeSoon(context: Context) {
+        runCatching {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "qapp-refreeze", ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<RefreezeWorker>()
+                    .setInitialDelay(15, TimeUnit.SECONDS)
+                    .setBackoffCriteria(androidx.work.BackoffPolicy.LINEAR, 1, TimeUnit.MINUTES)
+                    .build()
+            )
+        }
+    }
+
     fun runSoon(context: Context) {
         runCatching {
             WorkManager.getInstance(context).enqueueUniqueWork(
@@ -60,7 +73,23 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, "android.intent.action.QUICKBOOT_POWERON" -> {
                 UpdateWatcher.schedule(context)
                 UpdateWatcher.runSoon(context)
+                if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) {
+                    Repo.init(context)
+                    val c = Repo.config.value
+                    if (c.settings.refreezeOnBoot && c.active.isNotEmpty()) {
+                        Repo.update(backup = false) { it.copy(refreezePending = true) }
+                        UpdateWatcher.refreezeSoon(context)
+                    }
+                }
             }
         }
+    }
+}
+
+class RefreezeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        Repo.init(applicationContext)
+        return if (Repo.refreezeIfPending()) Result.success()
+        else if (runAttemptCount < 30) Result.retry() else Result.success()
     }
 }

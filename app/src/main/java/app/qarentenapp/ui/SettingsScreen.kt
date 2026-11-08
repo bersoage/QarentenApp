@@ -224,12 +224,15 @@ fun SettingsScreen(vm: MainViewModel) {
         }
 
         // ---------- Actualizaciones ----------
-        Section("Actualizaciones")
+        Section("Actualizaciones y arranque")
         ToggleRow("Vigilar actualizaciones", "Avisa si una app en cuarentena se activó sola por una actualización o un reseteo", s.monitorUpdates) { on ->
             vm.updateSettings { it.copy(monitorUpdates = on) }
         }
         ToggleRow("Volver a congelar sola", "Pone de nuevo en cuarentena esas apps sin preguntar", s.autoRequarantine) { on ->
             vm.updateSettings { it.copy(autoRequarantine = on) }
+        }
+        ToggleRow("Volver a congelar al reiniciar", "Al prender el celular, vuelve a congelar las apps que descongelaste desde Q'App. Con Shizuku, lo hace apenas Shizuku esté activo.", s.refreezeOnBoot) { on ->
+            vm.updateSettings { it.copy(refreezeOnBoot = on) }
         }
 
         // ---------- Avanzado ----------
@@ -246,7 +249,12 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ---------- Acerca de ----------
         Section("Acerca de")
-        Text("QarentenApp ${BuildConfig.VERSION_NAME}", modifier = Modifier.padding(horizontal = 24.dp))
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+            Text("QarentenApp", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Versión ${BuildConfig.VERSION_NAME}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Creada por Bernardo Soage", modifier = Modifier.padding(top = 6.dp))
+            Text("Corrientes, Argentina · 2026", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         TextButton(onClick = { report = true }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("Enviar reporte de error") }
     }
 

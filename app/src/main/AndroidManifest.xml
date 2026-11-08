@@ -95,7 +95,7 @@
         <receiver
             android:name=".core.QWidgetProvider"
             android:exported="true"
-            android:label="Q'App">
+            android:label="Q'App (anterior)">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -104,6 +104,39 @@
                 android:resource="@xml/widget_small_info" />
         </receiver>
 
+        <receiver
+            android:name=".core.AppWidget"
+            android:exported="true"
+            android:label="Q'App · App">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_app_info" />
+        </receiver>
+        <receiver
+            android:name=".core.GroupWidget"
+            android:exported="true"
+            android:label="Q'App · Grupo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_group_info" />
+        </receiver>
+        <receiver
+            android:name=".core.GroupWindowWidget"
+            android:exported="true"
+            android:label="Q'App · Ventana de grupo">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_groupwin_info" />
+        </receiver>
         <receiver
             android:name=".core.NotificationActionReceiver"
             android:exported="false" />

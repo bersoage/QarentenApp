@@ -56,6 +56,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         viewModelScope.launch {
             Repo.detectMode()
+            Repo.refreezeIfPending()
             Repo.refresh()
             checkRequarantine()
             _loaded.value = true
@@ -92,7 +93,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun labelOf(pkg: String) = Repo.labelOf(pkg)
 
-    fun redetect() = viewModelScope.launch { Repo.detectMode() }
+    fun redetect() = viewModelScope.launch { Repo.detectMode(); Repo.refreezeIfPending() }
     fun requestShizuku() = Freezer.requestShizukuPermission()
     fun refreshAsync() = viewModelScope.launch { Repo.refresh() }
 

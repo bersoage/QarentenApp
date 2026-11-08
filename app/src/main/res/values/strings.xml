@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">Q\'App</string>
     <string name="widget_desc">Congelá o activá un grupo o una app de un toque</string>
+    <string name="widget_app_desc">Congelá o descongelá una app de un toque</string>
+    <string name="widget_group_desc">Congelá o descongelá un grupo entero de un toque</string>
+    <string name="widget_groupwin_desc">Abrí la ventana de un grupo con sus apps</string>
     <string name="tile_drawer">Cajón de cuarentena</string>
     <string name="tile_quick">Menú rápido</string>
 </resources>

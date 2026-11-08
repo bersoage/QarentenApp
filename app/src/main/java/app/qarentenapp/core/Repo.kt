@@ -161,6 +161,18 @@ object Repo {
 
     fun ackSystem(pkgs: Collection<String>) = update { it.copy(systemAcked = it.systemAcked + pkgs) }
 
+    /** Después de reiniciar: congela las apps que habían quedado activas. Devuelve true si ya no queda nada pendiente. */
+    suspend fun refreezeIfPending(): Boolean {
+        val c = _config.value
+        if (!c.refreezePending) return true
+        if (c.active.isEmpty() || !c.settings.refreezeOnBoot) { update(backup = false) { it.copy(refreezePending = false) }; return true }
+        if (ensureMode() == Mode.NONE) return false
+        refresh()
+        setFrozen(_config.value.active, true, Origin.SYSTEM, silent = true)
+        update(backup = false) { it.copy(refreezePending = false) }
+        return true
+    }
+
     fun groupFrozen(g: Group): Boolean {
         val map = appMap()
         val installed = g.packages.mapNotNull { map[it] }.filterNot { it.protected }
