@@ -29,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +57,7 @@ import app.qarentenapp.core.Shortcuts
 import app.qarentenapp.data.AppEntry
 
 private enum class Filter(val label: String) {
-    ALL("Todas"), USER("Usuario"), SYSTEM("Sistema"), FROZEN("Congeladas"), ACTIVE("Activas"), FAVORITES("Favoritas")
+    USER("Usuario"), UNGROUPED("Desagrupadas"), FROZEN("Congeladas"), ACTIVE("Activas"), SYSTEM("Sistema")
 }
 
 @Composable
@@ -65,27 +66,18 @@ private fun rememberFiltered(vm: MainViewModel, query: String, filter: Filter, p
     val config by vm.config.collectAsState()
     val permMap by vm.perms.collectAsState()
     val s = config.settings
-    val favorites = config.favorites
-    return remember(apps, query, filter, s.showSystem, s.showServices, favorites, perms, permMap) {
+    val grouped = remember(config.groups) { config.groups.flatMap { it.packages }.toSet() }
+    return remember(apps, query, filter, s.showServices, grouped, perms, permMap) {
         val q = query.trim().lowercase()
         val wanted = PermCategory.entries.filter { it.name in perms }
         apps.filter { a ->
-            val visible = when {
-                !a.isSystem -> true
-                a.frozen -> true
-                !s.showSystem -> false
-                !a.hasLauncher -> s.showServices
-                else -> true
-            }
-            visible &&
-                when (filter) {
-                    Filter.ALL -> true
-                    Filter.USER -> !a.isSystem
-                    Filter.SYSTEM -> a.isSystem
-                    Filter.FROZEN -> a.frozen
-                    Filter.ACTIVE -> !a.frozen
-                    Filter.FAVORITES -> a.pkg in favorites
-                } &&
+            when (filter) {
+                Filter.USER -> !a.isSystem
+                Filter.UNGROUPED -> !a.isSystem && a.pkg !in grouped
+                Filter.FROZEN -> !a.isSystem && a.frozen
+                Filter.ACTIVE -> !a.isSystem && !a.frozen
+                Filter.SYSTEM -> a.isSystem && (a.hasLauncher || s.showServices)
+            } &&
                 (q.isEmpty() || a.label.lowercase().contains(q) || a.pkg.contains(q)) &&
                 (wanted.isEmpty() || permMap?.get(a.pkg)?.let { p -> wanted.any { c -> p.any { it in c.perms } } } == true)
         }
@@ -94,10 +86,13 @@ private fun rememberFiltered(vm: MainViewModel, query: String, filter: Filter, p
 
 @Composable
 private fun SearchAndFilters(
+    vm: MainViewModel,
     query: String, onQuery: (String) -> Unit,
     filter: Filter, onFilter: (Filter) -> Unit,
-    showSystem: Boolean, permCount: Int, onPerms: () -> Unit,
+    permCount: Int, onPerms: () -> Unit,
 ) {
+    val config by vm.config.collectAsState()
+    var warn by remember { mutableStateOf(false) }
     Column(Modifier.padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -115,13 +110,55 @@ private fun SearchAndFilters(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState()),
         ) {
-            Filter.entries.filter { showSystem || it != Filter.SYSTEM }.forEach { f ->
-                FilterChip(selected = filter == f, onClick = { onFilter(f) }, label = { Text(f.label) })
+            Filter.entries.forEach { f ->
+                if (f == Filter.SYSTEM) {
+                    val red = androidx.compose.ui.graphics.Color(0xFFB3261E)
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { if (filter != f && !config.settings.systemFilterWarned) warn = true else onFilter(f) },
+                        label = { Text(f.label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            labelColor = androidx.compose.ui.graphics.Color(0xFFFF8C82),
+                            selectedContainerColor = red,
+                            selectedLabelColor = androidx.compose.ui.graphics.Color.White,
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true, selected = filter == f,
+                            borderColor = red, selectedBorderColor = red, borderWidth = 1.5.dp,
+                        ),
+                    )
+                } else FilterChip(selected = filter == f, onClick = { onFilter(f) }, label = { Text(f.label) })
             }
         }
         if (permCount > 0) Text(
             "Filtrando por $permCount ${if (permCount == 1) "permiso" else "permisos"}",
             fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (warn) {
+        var dontShow by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { warn = false },
+            title = { Text("⚠️ Apps del sistema") },
+            text = {
+                Column {
+                    Text("Estas apps son parte de Android y del celular. Congelar la equivocada puede hacer que algo deje de funcionar: notificaciones, cámara, llamadas, el teclado o hasta el arranque del celular.")
+                    Text("Las esenciales están protegidas y no se pueden congelar, pero con el resto tené cuidado: congelá solo las que sepas para qué sirven.",
+                        modifier = Modifier.padding(top = 8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp).clickable { dontShow = !dontShow }) {
+                        Checkbox(checked = dontShow, onCheckedChange = { dontShow = it })
+                        Text("No volver a mostrar este aviso", fontSize = 14.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    warn = false
+                    if (dontShow) vm.updateSettings { it.copy(systemFilterWarned = true) }
+                    onFilter(Filter.SYSTEM)
+                }) { Text("Entiendo, mostrar") }
+            },
+            dismissButton = { TextButton(onClick = { warn = false }) { Text("Cancelar") } },
         )
     }
 }
@@ -156,7 +193,7 @@ private fun PermsDialog(selected: Set<String>, onDismiss: () -> Unit, onApply: (
 fun AppsScreen(vm: MainViewModel, openApp: (String) -> Unit) {
     val ctx = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
+    var filter by rememberSaveable { mutableStateOf(Filter.USER) }
     var perms by rememberSaveable { mutableStateOf(setOf<String>()) }
     var permsDialog by rememberSaveable { mutableStateOf(false) }
     val config by vm.config.collectAsState()
@@ -165,7 +202,7 @@ fun AppsScreen(vm: MainViewModel, openApp: (String) -> Unit) {
     Column {
         Text("Todas las apps", fontSize = 28.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp))
-        SearchAndFilters(query, { query = it }, filter, { filter = it }, config.settings.showSystem, perms.size,
+        SearchAndFilters(vm, query, { query = it }, filter, { filter = it }, perms.size,
             onPerms = { vm.loadPermissions(); permsDialog = true })
         LazyColumn {
             items(list, key = { it.pkg }) { a ->
@@ -244,7 +281,7 @@ fun PickAppsScreen(vm: MainViewModel, groupId: String, done: () -> Unit) {
     if (g == null) { androidx.compose.runtime.LaunchedEffect(Unit) { done() }; return }
     var selected by rememberSaveable { mutableStateOf(g.packages.toList()) }
     var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableStateOf(Filter.ALL) }
+    var filter by rememberSaveable { mutableStateOf(Filter.USER) }
     var perms by rememberSaveable { mutableStateOf(setOf<String>()) }
     var permsDialog by rememberSaveable { mutableStateOf(false) }
     val list = rememberFiltered(vm, query, filter, perms)
@@ -257,7 +294,7 @@ fun PickAppsScreen(vm: MainViewModel, groupId: String, done: () -> Unit) {
                 TextButton(onClick = { vm.setGroupApps(groupId, selected); done() }) { Text("Listo (${selected.size})") }
             },
         )
-        SearchAndFilters(query, { query = it }, filter, { filter = it }, config.settings.showSystem, perms.size,
+        SearchAndFilters(vm, query, { query = it }, filter, { filter = it }, perms.size,
             onPerms = { vm.loadPermissions(); permsDialog = true })
         LazyColumn {
             items(list, key = { it.pkg }) { a ->

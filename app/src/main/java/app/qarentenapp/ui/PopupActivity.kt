@@ -113,8 +113,10 @@ class PopupActivity : ComponentActivity() {
      */
     @Composable
     private fun GroupWindow(vm: MainViewModel, groupId: String?, close: () -> Unit) {
-        val head = Color(0xFF151515); val line = Color(0xFF3D3B39); val body = Color(0xFF20201F)
-        val txt = Color(0xFFECECEA); val sub = Color(0xFFA0A09C)
+        // Colores del tema elegido (con «Gris carbón» queda igual que el diseño original)
+        val cs = MaterialTheme.colorScheme
+        val head = cs.surfaceContainerLowest; val line = cs.outlineVariant; val body = cs.surfaceContainer
+        val txt = cs.onSurface; val sub = cs.onSurfaceVariant
         val apps by Repo.apps.collectAsState()
         val config by Repo.config.collectAsState()
         val busy by Repo.busy.collectAsState()
@@ -140,7 +142,7 @@ class PopupActivity : ComponentActivity() {
                         Modifier.fillMaxWidth().background(head).padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (g != null) GroupGlyph(g.icon, 28.dp, Color(0xFF78AAE6))
+                        if (g != null) GroupGlyph(g.icon, 28.dp, MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
                         Text(g?.name ?: "Grupo borrado", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = txt,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

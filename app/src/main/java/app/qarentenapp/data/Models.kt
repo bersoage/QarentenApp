@@ -37,8 +37,16 @@ data class AppSettings(
     val showPackageName: Boolean = false,
     // Apariencia
     val iconTheme: String = "ORIGINAL",
-    /** AUTO (según el celular), LIGHT (claro hielo) o DARK (azul noche). */
+    /** (Beta 6) AUTO, LIGHT o DARK. Reemplazado por [background]. */
     val themeMode: String = "AUTO",
+    /** Fondo: AUTO (según el celular), LIGHT (claro hielo), NAVY (azul noche), CHARCOAL (gris carbón) u OLED (negro). */
+    val background: String = "",
+    /** Fondo oscuro que se usa en AUTO cuando el celular está en modo oscuro. */
+    val darkStyle: String = "NAVY",
+    /** Color de acento (índice de la paleta). */
+    val accent: Int = 0,
+    /** Ya se avisó sobre el filtro «Sistema» y pidió no volver a mostrarlo. */
+    val systemFilterWarned: Boolean = false,
     /** Ya se mostró el cartel de bienvenida. */
     val welcomeShown: Boolean = false,
     // Notificación

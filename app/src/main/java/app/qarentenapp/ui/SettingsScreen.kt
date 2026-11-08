@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -135,12 +136,36 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ---------- Apariencia ----------
         Section("Apariencia")
-        Text("Colores", modifier = Modifier.padding(horizontal = 24.dp))
+        Text("Fondo", modifier = Modifier.padding(horizontal = 24.dp))
+        val bg = effectiveBackground(s)
         FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("AUTO" to "Según el celular", "LIGHT" to "Claro hielo", "DARK" to "Azul noche").forEach { (key, label) ->
-                FilterChip(selected = s.themeMode == key, onClick = { vm.updateSettings { it.copy(themeMode = key) } }, label = { Text(label) })
+            listOf("AUTO" to "Según el celular", "LIGHT" to "Claro hielo", "NAVY" to "Azul noche", "CHARCOAL" to "Gris carbón", "OLED" to "Negro OLED")
+                .forEach { (key, label) ->
+                    FilterChip(selected = bg == key, onClick = { vm.updateSettings { it.copy(background = key) } }, label = { Text(label) })
+                }
+        }
+        if (bg == "AUTO") {
+            Text("De noche, usar:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
+            FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("NAVY" to "Azul noche", "CHARCOAL" to "Gris carbón", "OLED" to "Negro OLED").forEach { (key, label) ->
+                    FilterChip(selected = s.darkStyle == key, onClick = { vm.updateSettings { it.copy(darkStyle = key) } }, label = { Text(label) })
+                }
             }
         }
+        Text("Color de acento", modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
+        FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Accents.forEachIndexed { i, (name, light, dark) ->
+                androidx.compose.material3.Surface(
+                    onClick = { vm.updateSettings { it.copy(accent = i) } },
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = if (androidx.compose.foundation.isSystemInDarkTheme()) dark else light,
+                    border = if (s.accent == i) androidx.compose.foundation.BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface) else null,
+                    modifier = Modifier.size(40.dp),
+                ) {}
+            }
+        }
+        Text(Accents[s.accent.coerceIn(0, Accents.lastIndex)].first, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp))
         Text("Tema de íconos", modifier = Modifier.padding(horizontal = 24.dp))
         FlowRow(Modifier.padding(horizontal = 24.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconThemes.forEach { (key, label) ->
@@ -209,10 +234,7 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ---------- Avanzado ----------
         Section("Avanzado")
-        ToggleRow("Mostrar apps del sistema", "Permite congelar apps del sistema. Las esenciales quedan protegidas.", s.showSystem) { on ->
-            if (on && !s.showSystemWarned) warnSystem = true else vm.updateSettings { it.copy(showSystem = on) }
-        }
-        if (s.showSystem) ToggleRow("Incluir servicios del sistema", "Muestra también los componentes del sistema que no tienen ícono", s.showServices) { on ->
+        ToggleRow("Incluir servicios del sistema", "En el filtro «Sistema», muestra también los componentes que no tienen ícono", s.showServices) { on ->
             if (on) warnServices = true else vm.updateSettings { it.copy(showServices = false) }
         }
         ToggleRow("Mostrar nombre del paquete", "Muestra el identificador técnico de cada app", s.showPackageName) { on ->
